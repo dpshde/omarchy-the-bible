@@ -110,6 +110,12 @@ Item {
             if (event.key === Qt.Key_Escape) {
               if (!reader.handleEscape()) root.dismiss()
               event.accepted = true
+            } else if (event.key === Qt.Key_Left) {
+              reader.stepChapter(-1)
+              event.accepted = true
+            } else if (event.key === Qt.Key_Right) {
+              reader.stepChapter(1)
+              event.accepted = true
             }
             return
           }

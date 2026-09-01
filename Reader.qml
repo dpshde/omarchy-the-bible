@@ -294,16 +294,11 @@ Item {
   }
 
   function handleMove(dx, dy, extend) {
-    if (root.mode === "books") {
-      if (dx < 0) root.testament = "ot"
-      if (dx > 0) root.testament = "nt"
+    if (dx !== 0) {
+      root.stepChapter(dx)
       return
     }
-    if (root.mode === "chapters") {
-      if (dx !== 0) root.pickChapter(Math.max(1, Math.min(GrabBcv.chapterCount(root.book), root.chapter + dx)))
-      return
-    }
-    if (dx !== 0) root.stepChapter(dx)
+    if (root.mode === "books" || root.mode === "chapters") return
     if (dy < 0 && !extend && root.focusVerse <= 1) {
       root.focusSearch(false)
       return
@@ -476,6 +471,12 @@ Item {
           event.accepted = true
         } else if (event.key === Qt.Key_Up) {
           event.accepted = true
+        } else if (event.key === Qt.Key_Left) {
+          root.stepChapter(-1)
+          event.accepted = true
+        } else if (event.key === Qt.Key_Right) {
+          root.stepChapter(1)
+          event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
           if (event.modifiers & Qt.ControlModifier) root.routeNow()
           else root.submitSearch()
@@ -576,6 +577,7 @@ Item {
           preventStealing: root.dragging
           cursorShape: Qt.IBeamCursor
           onPressed: function(mouse) {
+            root.requestVerseFocus()
             var idx = root.verseIndexAt(mouse.y)
             if (idx < 0) return
             var verse = root.verses[idx] ? root.verses[idx].n : idx + 1

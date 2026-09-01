@@ -88,6 +88,12 @@ Panel {
           if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
             root.switchPanel((event.modifiers & Qt.ShiftModifier) || event.key === Qt.Key_Backtab ? -1 : 1)
             event.accepted = true
+          } else if (event.key === Qt.Key_Left) {
+            reader.stepChapter(-1)
+            event.accepted = true
+          } else if (event.key === Qt.Key_Right) {
+            reader.stepChapter(1)
+            event.accepted = true
           }
           return
         }
