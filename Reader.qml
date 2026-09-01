@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -51,6 +52,7 @@ Item {
   readonly property string routeLink: Route.routeUrl(root.canonical)
   readonly property string marginLink: Route.marginUrl(root.canonical)
   readonly property bool searchActive: searchField.activeFocus
+  readonly property bool keysLive: root.Window.window ? root.Window.window.visible : false
   readonly property var visibleBooks: {
     var codes = Bible.booksForTestament(root.testament, root.bookCodeList)
     var filter = String(root.searchText || "").trim().split(/\s+/)[0] || ""
@@ -416,88 +418,98 @@ Item {
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
-      height: headerRow.implicitHeight
+      height: Math.max(Style.space(28), titleCol.implicitHeight)
 
-      Row {
-        id: headerRow
+      Button {
+        id: prevBtn
         anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(28)
+        implicitHeight: Style.space(28)
+        horizontalPadding: 0
+        verticalPadding: 0
+        iconText: "󰒮"
+        foreground: root.foreground
+        tooltipText: "Previous chapter"
+        onClicked: root.stepChapter(-1)
+      }
+
+      Button {
+        id: booksBtn
         anchors.right: parent.right
-        spacing: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(28)
+        implicitHeight: Style.space(28)
+        horizontalPadding: 0
+        verticalPadding: 0
+        iconText: "󰂻"
+        foreground: root.mode === "read" ? root.muted : root.accent
+        tooltipText: "Books"
+        onClicked: {
+          if (root.mode === "read") root.openBooks()
+          else root.mode = "read"
+        }
+      }
 
-        Button {
-          width: Style.space(28)
-          implicitHeight: Style.space(28)
-          horizontalPadding: 0
-          verticalPadding: 0
-          iconText: "󰒮"
-          foreground: root.foreground
-          tooltipText: "Previous chapter"
-          onClicked: root.stepChapter(-1)
+      Button {
+        id: expandBtn
+        anchors.right: booksBtn.left
+        anchors.rightMargin: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        implicitHeight: Style.space(28)
+        horizontalPadding: Style.space(8)
+        text: root.expanded ? "Restore" : "Expand"
+        bordered: true
+        foreground: root.foreground
+        tooltipText: root.expanded ? "Restore popup" : "Expand to overlay"
+        onClicked: {
+          if (root.expanded) root.requestCollapse()
+          else root.requestExpand()
+        }
+      }
+
+      Button {
+        id: nextBtn
+        anchors.right: expandBtn.left
+        anchors.rightMargin: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(28)
+        implicitHeight: Style.space(28)
+        horizontalPadding: 0
+        verticalPadding: 0
+        iconText: "󰒭"
+        foreground: root.foreground
+        tooltipText: "Next chapter"
+        onClicked: root.stepChapter(1)
+      }
+
+      Column {
+        id: titleCol
+        anchors.left: prevBtn.right
+        anchors.right: nextBtn.left
+        anchors.leftMargin: Style.space(6)
+        anchors.rightMargin: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(2)
+
+        Text {
+          width: parent.width
+          text: root.displayLabel
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.subtitle
+          font.bold: true
+          elide: Text.ElideRight
+          horizontalAlignment: Text.AlignHCenter
         }
 
-        Column {
-          width: parent.width - Style.space(28) * 4 - headerRow.spacing * 4
-          spacing: Style.space(2)
-          anchors.verticalCenter: parent.verticalCenter
-
-          Text {
-            width: parent.width
-            text: root.displayLabel
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-            elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
-          }
-
-          Text {
-            width: parent.width
-            text: "BSB"
-            color: root.muted
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
-          }
-        }
-
-        Button {
-          width: Style.space(28)
-          implicitHeight: Style.space(28)
-          horizontalPadding: 0
-          verticalPadding: 0
-          iconText: "󰒭"
-          foreground: root.foreground
-          tooltipText: "Next chapter"
-          onClicked: root.stepChapter(1)
-        }
-
-        Button {
-          width: Style.space(28)
-          implicitHeight: Style.space(28)
-          horizontalPadding: 0
-          verticalPadding: 0
-          iconText: root.expanded ? "󰊔" : "󰊓"
-          foreground: root.foreground
-          tooltipText: root.expanded ? "Restore popup" : "Expand"
-          onClicked: {
-            if (root.expanded) root.requestCollapse()
-            else root.requestExpand()
-          }
-        }
-
-        Button {
-          width: Style.space(28)
-          implicitHeight: Style.space(28)
-          horizontalPadding: 0
-          verticalPadding: 0
-          iconText: "󰂻"
-          foreground: root.mode === "read" ? root.muted : root.accent
-          tooltipText: "Books"
-          onClicked: {
-            if (root.mode === "read") root.openBooks()
-            else root.mode = "read"
-          }
+        Text {
+          width: parent.width
+          text: "BSB"
+          color: root.muted
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          horizontalAlignment: Text.AlignHCenter
         }
       }
     }
@@ -826,4 +838,27 @@ Item {
       }
     }
   }
+
+  Shortcut { enabled: root.keysLive; sequence: "Left"; onActivated: root.stepChapter(-1) }
+  Shortcut { enabled: root.keysLive; sequence: "Right"; onActivated: root.stepChapter(1) }
+  Shortcut {
+    enabled: root.keysLive
+    sequence: "Down"
+    onActivated: {
+      if (root.searchActive) root.enterVersesFromSearch()
+      else root.handleMove(0, 1, false)
+    }
+  }
+  Shortcut {
+    enabled: root.keysLive
+    sequence: "Up"
+    onActivated: {
+      if (root.searchActive) return
+      root.handleMove(0, -1, false)
+    }
+  }
+  Shortcut { enabled: root.keysLive; sequence: "Shift+Down"; onActivated: root.handleMove(0, 1, true) }
+  Shortcut { enabled: root.keysLive; sequence: "Shift+Up"; onActivated: root.handleMove(0, -1, true) }
+  Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Space"; onActivated: root.handleMove(0, 1, true) }
+  Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Shift+Space"; onActivated: root.handleMove(0, -1, true) }
 }
