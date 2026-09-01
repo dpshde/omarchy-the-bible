@@ -4,7 +4,7 @@ Parse a passage, select verses, and open [route.bible](https://route.bible) from
 
 Plugin id: `dpshade.route-bible`.
 
-The default surface is a **right-side popup** from the bar chip. A fullscreen overlay is optional and only opens when you summon it.
+The default surface is a **right-side popup** from the bar chip. Use the **expand** button (or `f`) to open the fullscreen overlay.
 
 ## Install
 
@@ -36,13 +36,8 @@ omarchy plugin enable dpshade.route-bible --section right
 - Click-drag verses, or hold Shift while using the arrow keys, to select a range.
 - **Enter** (with the reader focused) opens route.bible for the selection.
 - **B** opens the book picker, **C** the chapter grid, **/** focuses search, **Y** copies the URL, **Ctrl+C** copies the selected text.
+- **Expand** (or `f`) opens the fullscreen overlay. The overlay's restore button (or `f` again) returns to the popup.
 - Escape clears search, steps back through pickers, then closes.
-
-Optional overlay (larger, centered):
-
-```sh
-omarchy-shell shell summon dpshade.route-bible '{}'
-```
 
 Optional Hyprland bind (add this yourself; the plugin does not edit your bindings):
 

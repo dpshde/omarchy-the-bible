@@ -56,6 +56,15 @@ Item {
     else root.open("{}")
   }
 
+  function collapseToPopup() {
+    reader.persist()
+    root.dismiss()
+    Qt.callLater(function() {
+      if (root.shell && root.shell.bar && typeof root.shell.bar.summonBarWidget === "function")
+        root.shell.bar.summonBarWidget("dpshade.route-bible")
+    })
+  }
+
   PanelWindow {
     id: panel
     visible: root.opened
@@ -169,7 +178,9 @@ Item {
           muted: Color.muted
           accent: Color.accent
           fontFamily: root.fontFamily
+          expanded: true
           onRequestClose: root.dismiss()
+          onRequestCollapse: root.collapseToPopup()
         }
       }
     }

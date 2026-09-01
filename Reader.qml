@@ -16,6 +16,7 @@ Item {
   property color accent: Color.accent
   property string fontFamily: Style.font.family
   property var host: null
+  property bool expanded: false
 
   property string book: Bible.defaultBook()
   property int chapter: Bible.defaultChapter()
@@ -63,6 +64,8 @@ Item {
   }
 
   signal requestClose()
+  signal requestExpand()
+  signal requestCollapse()
 
   function fileUrlToPath(url) {
     var s = String(url || "")
@@ -298,6 +301,11 @@ Item {
     if (t === "g" || t === "G" || t === "/") { root.focusSearch(); return }
     if (t === "o" || t === "O") { root.routeNow(); return }
     if (t === "y" || t === "Y") { root.copyUrl(); return }
+    if (t === "f" || t === "F") {
+      if (root.expanded) root.requestCollapse()
+      else root.requestExpand()
+      return
+    }
     if (t.length === 1 && t.charCodeAt(0) >= 32) root.focusSearch()
   }
 
@@ -358,7 +366,7 @@ Item {
         }
 
         Column {
-          width: parent.width - Style.space(128)
+          width: parent.width - Style.space(28) * 4 - headerRow.spacing * 4
           spacing: Style.space(2)
           anchors.verticalCenter: parent.verticalCenter
 
@@ -392,6 +400,20 @@ Item {
           foreground: root.foreground
           tooltipText: "Next chapter"
           onClicked: root.stepChapter(1)
+        }
+
+        Button {
+          width: Style.space(28)
+          implicitHeight: Style.space(28)
+          horizontalPadding: 0
+          verticalPadding: 0
+          iconText: root.expanded ? "󰊔" : "󰊓"
+          foreground: root.foreground
+          tooltipText: root.expanded ? "Restore popup" : "Expand"
+          onClicked: {
+            if (root.expanded) root.requestCollapse()
+            else root.requestExpand()
+          }
         }
 
         Button {

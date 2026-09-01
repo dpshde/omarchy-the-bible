@@ -57,6 +57,14 @@ Panel {
     reader.routeNow()
   }
 
+  function expandToOverlay() {
+    reader.persist()
+    root.close()
+    Qt.callLater(function() {
+      Util.execArgv(["omarchy-shell", "shell", "summon", "dpshade.route-bible", "{}"])
+    })
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -178,7 +186,9 @@ Panel {
         accent: Color.accent
         fontFamily: root.contentFontFamily
         host: root
+        expanded: false
         onRequestClose: root.close()
+        onRequestExpand: root.expandToOverlay()
       }
     }
   }
