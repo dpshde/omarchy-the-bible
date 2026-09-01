@@ -167,17 +167,38 @@ Item {
   }
 
   function stepChapter(delta) {
-    var place = delta > 0
-      ? Bible.nextChapter(root.book, root.chapter, root.bookCodeList, GrabBcv.chapterCount)
-      : Bible.prevChapter(root.book, root.chapter, root.bookCodeList, GrabBcv.chapterCount)
-    root.applyPlace(place.book, place.chapter, 1, 1, true)
+    var book = root.book
+    var chapter = root.chapter
+    var codes = GrabBcv.bookCodes() || []
+    var max = GrabBcv.chapterCount(book)
+    if (!(max > 0)) max = 1
+    if (delta > 0) {
+      if (chapter < max) {
+        root.applyPlace(book, chapter + 1, 1, 1, true)
+        return
+      }
+      var nextIdx = codes.indexOf(book) + 1
+      if (nextIdx > 0 && nextIdx < codes.length)
+        root.applyPlace(codes[nextIdx], 1, 1, 1, true)
+      return
+    }
+    if (chapter > 1) {
+      root.applyPlace(book, chapter - 1, 1, 1, true)
+      return
+    }
+    var prevIdx = codes.indexOf(book) - 1
+    if (prevIdx >= 0) {
+      var prev = codes[prevIdx]
+      var prevMax = GrabBcv.chapterCount(prev)
+      root.applyPlace(prev, prevMax > 0 ? prevMax : 1, 1, 1, true)
+    }
   }
 
   function stepBook(delta) {
-    var place = delta > 0
-      ? Bible.nextBook(root.book, root.bookCodeList)
-      : Bible.prevBook(root.book, root.bookCodeList)
-    root.applyPlace(place.book, 1, 1, 1, true)
+    var codes = GrabBcv.bookCodes() || []
+    var idx = codes.indexOf(root.book) + (delta > 0 ? 1 : -1)
+    if (idx < 0 || idx >= codes.length) return
+    root.applyPlace(codes[idx], 1, 1, 1, true)
   }
 
   function refreshSuggestions() {
