@@ -1,0 +1,54 @@
+// Generated from /home/dpshde/Developer/selah-tools/labs/route-bible-omarchy/src/route.ts. Do not edit by hand.
+.pragma library
+function objectFromEntries(entries) {
+  var obj = {};
+  if (!entries) return obj;
+  var list = [];
+  if (typeof entries.length === "number") {
+    for (var i = 0; i < entries.length; i++) list.push(entries[i]);
+  } else if (entries.forEach) {
+    entries.forEach(function(item) { list.push(item); });
+  }
+  for (var j = 0; j < list.length; j++) {
+    var pair = list[j];
+    if (pair) obj[pair[0]] = pair[1];
+  }
+  return obj;
+}
+var RouteApi = (function() {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/route.ts
+  var route_exports = {};
+  __export(route_exports, {
+    ROUTE_BASE: () => ROUTE_BASE,
+    ROUTE_SRC: () => ROUTE_SRC,
+    routeUrl: () => routeUrl
+  });
+  var ROUTE_BASE = "https://www.route.bible";
+  var ROUTE_SRC = "omarchy";
+  function routeUrl(canonical) {
+    const slug = String(canonical || "").trim().toLowerCase().replace(/^\/+/, "");
+    if (!slug) return `${ROUTE_BASE}/?src=${ROUTE_SRC}`;
+    return `${ROUTE_BASE}/${encodeURIComponent(slug)}?src=${ROUTE_SRC}`;
+  }
+  return __toCommonJS(route_exports);
+})();
+
+function routeUrl() { return RouteApi.routeUrl.apply(null, arguments); }

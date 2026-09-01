@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "dpshade.route-bible",
+  "name": "route.bible",
+  "version": "1.0.0",
+  "author": "Dylan Shade",
+  "license": "MIT",
+  "description": "Parse a passage, select verses, and open route.bible from the Omarchy bar.",
+  "kinds": ["bar-widget", "overlay"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "overlay": "Overlay.qml"
+  },
+  "barWidget": {
+    "displayName": "route.bible",
+    "description": "Current passage; click to select verses, middle-click to open route.bible.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
