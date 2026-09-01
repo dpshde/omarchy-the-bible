@@ -181,6 +181,7 @@ Item {
           expanded: true
           onRequestClose: root.dismiss()
           onRequestCollapse: root.collapseToPopup()
+          onRequestVerseFocus: keyCatcher.forceActiveFocus()
         }
       }
     }

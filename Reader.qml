@@ -66,6 +66,7 @@ Item {
   signal requestClose()
   signal requestExpand()
   signal requestCollapse()
+  signal requestVerseFocus()
 
   function fileUrlToPath(url) {
     var s = String(url || "")
@@ -244,9 +245,21 @@ Item {
     root.applyPlace(root.book, n, 1, 1, true)
   }
 
-  function focusSearch() {
+  function focusSearch(selectAll) {
     searchField.forceActiveFocus()
-    searchField.selectAll()
+    if (selectAll === false) {
+      searchField.cursorPosition = searchField.text.length
+    } else {
+      searchField.selectAll()
+    }
+  }
+
+  function enterVersesFromSearch() {
+    root.mode = "read"
+    root.suggestionIndex = -1
+    searchField.focus = false
+    root.requestVerseFocus()
+    Qt.callLater(root.scrollToFocus)
   }
 
   function scrollToFocus() {
@@ -291,6 +304,10 @@ Item {
       return
     }
     if (dx !== 0) root.stepChapter(dx)
+    if (dy < 0 && !extend && root.focusVerse <= 1) {
+      root.focusSearch(false)
+      return
+    }
     if (dy !== 0) root.moveFocus(dy, extend === true)
   }
 
@@ -449,19 +466,15 @@ Item {
       }
       Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape) {
-          if (!root.handleEscape()) searchField.focus = false
-          event.accepted = true
-        } else if (event.key === Qt.Key_Down) {
-          if (root.suggestions.length > 0)
-            root.suggestionIndex = Math.min(root.suggestions.length - 1, root.suggestionIndex + 1)
-          else {
+          if (!root.handleEscape()) {
             searchField.focus = false
-            root.mode = "read"
+            root.requestVerseFocus()
           }
           event.accepted = true
+        } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Tab) {
+          root.enterVersesFromSearch()
+          event.accepted = true
         } else if (event.key === Qt.Key_Up) {
-          if (root.suggestions.length > 0)
-            root.suggestionIndex = Math.max(0, root.suggestionIndex - 1)
           event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
           if (event.modifiers & Qt.ControlModifier) root.routeNow()

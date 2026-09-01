@@ -189,6 +189,7 @@ Panel {
         expanded: false
         onRequestClose: root.close()
         onRequestExpand: root.expandToOverlay()
+        onRequestVerseFocus: keyCatcher.forceActiveFocus()
       }
     }
   }
