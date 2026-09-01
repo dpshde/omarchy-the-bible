@@ -32,7 +32,6 @@ Item {
   property int suggestionIndex: -1
   property bool searchParsed: false
   property string searchHint: ""
-  property string bookFilter: ""
   property bool stateReady: false
   property bool dragging: false
 
@@ -52,7 +51,8 @@ Item {
   readonly property bool searchActive: searchField.activeFocus
   readonly property var visibleBooks: {
     var codes = Bible.booksForTestament(root.testament, root.bookCodeList)
-    var filter = String(root.bookFilter || "").replace(/[^a-z0-9]+/gi, "").toLowerCase()
+    var filter = String(root.searchText || "").trim().split(/\s+/)[0] || ""
+    filter = filter.replace(/[^a-z0-9]+/gi, "").toLowerCase()
     if (!filter) return codes
     var out = []
     for (var i = 0; i < codes.length; i++) {
@@ -247,7 +247,6 @@ Item {
 
   function openBooks() {
     root.testament = Bible.testamentOf(root.book, root.bookCodeList)
-    root.bookFilter = ""
     root.mode = "books"
   }
 
@@ -655,22 +654,12 @@ Item {
           ]
           onChanged: function(value) {
             root.testament = value
-            root.bookFilter = ""
           }
-        }
-
-        TextField {
-          width: parent.width
-          visible: root.mode === "books"
-          placeholderText: "Filter books"
-          foreground: root.foreground
-          text: root.bookFilter
-          onTextChanged: root.bookFilter = text
         }
 
         ListView {
           width: parent.width
-          height: parent.height - (root.mode === "books" ? Style.space(72) : 0)
+          height: parent.height - (root.mode === "books" ? Style.space(40) : 0)
           clip: true
           visible: root.mode === "books"
           model: root.visibleBooks
