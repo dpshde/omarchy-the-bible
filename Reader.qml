@@ -859,6 +859,6 @@ Item {
   }
   Shortcut { enabled: root.keysLive; sequence: "Shift+Down"; onActivated: root.handleMove(0, 1, true) }
   Shortcut { enabled: root.keysLive; sequence: "Shift+Up"; onActivated: root.handleMove(0, -1, true) }
-  Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Space"; onActivated: root.handleMove(0, 1, true) }
+  Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Space"; onActivated: root.selectVerse(root.focusVerse) }
   Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Shift+Space"; onActivated: root.handleMove(0, -1, true) }
 }

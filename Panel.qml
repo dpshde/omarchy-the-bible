@@ -185,7 +185,8 @@ Panel {
           return
         }
         if (event.key === Qt.Key_Space) {
-          reader.handleMove(0, shift ? -1 : 1, true)
+          if (shift) reader.handleMove(0, -1, true)
+          else reader.selectVerse(reader.focusVerse)
           event.accepted = true
           return
         }
