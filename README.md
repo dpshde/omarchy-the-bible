@@ -33,7 +33,7 @@ omarchy plugin enable dpshade.route-bible --section right
 - **Middle-click** the chip to open the current selection on route.bible immediately.
 - Type a reference (`jn 3:16-18`, `Psalm 23`, a bible.com link) and press Enter to jump there. Down moves from the input into the verses; Up from the first verse returns to the input. Left/Right change chapter; Ctrl+Left/Right change book.
 - **Ctrl+Enter** in the search field opens that passage on route.bible immediately.
-- Click-drag verses, or hold Shift while using the arrow keys, to select a range.
+- Click-drag verses, or hold Shift while using the arrow keys, to select a range. Space selects through the next verse; Shift+Space selects through the previous verse.
 - **Enter** (with the reader focused) opens route.bible for the selection.
 - **B** opens the book picker, **C** the chapter grid, **/** focuses search, **Y** copies the URL, **Ctrl+C** copies the selected text.
 - **Expand** (or `f`) opens the fullscreen overlay. The overlay's restore button (or `f` again) returns to the popup.

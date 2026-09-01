@@ -178,6 +178,11 @@ Panel {
           event.accepted = true
           return
         }
+        if (event.key === Qt.Key_Space) {
+          reader.handleMove(0, shift ? -1 : 1, true)
+          event.accepted = true
+          return
+        }
         if (event.text && event.text.length === 1) {
           reader.handleTextKey(event.text)
           event.accepted = true
