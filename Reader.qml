@@ -34,6 +34,7 @@ Item {
   property string searchHint: ""
   property bool stateReady: false
   property bool dragging: false
+  property bool extending: false
 
   readonly property var bookCodeList: GrabBcv.bookCodes()
   readonly property int verseTotal: Bible.lastVerseNumber(root.bible, root.book, root.chapter)
@@ -117,6 +118,7 @@ Item {
 
   function selectVerse(n) {
     var verse = Bible.clampVerse(root.bible, root.book, root.chapter, n)
+    root.extending = false
     root.anchorVerse = verse
     root.focusVerse = verse
     root.startVerse = verse
@@ -138,6 +140,7 @@ Item {
   }
 
   function selectWholeChapter() {
+    root.extending = false
     root.anchorVerse = 1
     root.focusVerse = root.verseTotal
     root.startVerse = 1
@@ -149,11 +152,17 @@ Item {
     if (root.mode !== "read") return
     var next = Bible.clampVerse(root.bible, root.book, root.chapter, root.focusVerse + delta)
     if (extend) {
+      if (!root.extending) {
+        root.anchorVerse = root.focusVerse
+        root.extending = true
+      }
       root.focusVerse = next
       root.selectRange(root.anchorVerse, next)
-    } else {
-      root.selectVerse(next)
+      return
     }
+    root.extending = false
+    root.focusVerse = next
+    root.scrollToFocus()
   }
 
   function stepChapter(delta) {
@@ -272,6 +281,8 @@ Item {
   function enterVersesFromSearch() {
     root.mode = "read"
     root.suggestionIndex = -1
+    root.extending = false
+    root.focusVerse = 1
     searchField.focus = false
     root.requestVerseFocus()
     Qt.callLater(root.scrollToFocus)
@@ -584,18 +595,31 @@ Item {
 
           readonly property bool selected: modelData.n >= Math.min(root.startVerse, root.endVerse)
             && modelData.n <= Math.max(root.startVerse, root.endVerse)
+          readonly property bool hovered: !root.searchActive && modelData.n === root.focusVerse
 
           Rectangle {
             anchors.fill: parent
             radius: Style.cornerRadius
-            color: parent.selected ? Style.selectionFillFor(root.foreground, root.accent) : "transparent"
+            color: parent.selected
+              ? Style.selectionFillFor(root.foreground, root.accent)
+              : (parent.hovered ? Style.controlFill(false, true, root.foreground, root.accent) : "transparent")
+          }
+
+          Rectangle {
+            visible: parent.hovered
+            width: Math.max(2, Style.space(2))
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            radius: width
+            color: root.accent
           }
 
           Text {
             id: verseText
             width: parent.width
             text: modelData.n + "  " + modelData.t
-            color: parent.selected ? root.foreground : (modelData.n === root.focusVerse ? root.accent : root.foreground)
+            color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
@@ -622,13 +646,16 @@ Item {
             }
           }
           onPositionChanged: function(mouse) {
-            if (!root.dragging) return
             var idx = root.verseIndexAt(mouse.y)
             if (idx < 0) return
             var verse = root.verses[idx] ? root.verses[idx].n : idx + 1
-            root.selectRange(root.anchorVerse, verse)
-            if (mouse.y < 24) verseList.flick(0, 420)
-            else if (mouse.y > height - 24) verseList.flick(0, -420)
+            if (root.dragging) {
+              root.selectRange(root.anchorVerse, verse)
+              if (mouse.y < 24) verseList.flick(0, 420)
+              else if (mouse.y > height - 24) verseList.flick(0, -420)
+            } else {
+              root.focusVerse = verse
+            }
           }
           onReleased: root.dragging = false
           onCanceled: root.dragging = false
