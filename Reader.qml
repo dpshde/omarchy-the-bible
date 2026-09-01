@@ -451,17 +451,14 @@ Item {
         }
       }
 
-      Button {
+      IconButton {
         id: expandBtn
         anchors.right: booksBtn.left
         anchors.rightMargin: Style.space(6)
         anchors.verticalCenter: parent.verticalCenter
-        implicitHeight: Style.space(28)
-        horizontalPadding: Style.space(8)
-        text: root.expanded ? "Restore" : "Expand"
-        bordered: true
+        iconSource: Qt.resolvedUrl(root.expanded ? "icons/restore.svg" : "icons/expand.svg")
         foreground: root.foreground
-        tooltipText: root.expanded ? "Restore popup" : "Expand to overlay"
+        tooltipText: root.expanded ? "Restore popup" : "Expand"
         onClicked: {
           if (root.expanded) root.requestCollapse()
           else root.requestExpand()
@@ -811,9 +808,8 @@ Item {
         anchors.right: parent.right
         spacing: Style.space(6)
 
-        Button {
-          text: "Copy"
-          bordered: true
+        IconButton {
+          iconSource: Qt.resolvedUrl("icons/copy.svg")
           foreground: root.foreground
           tooltipText: "Copy text and URL"
           onClicked: root.copyText()

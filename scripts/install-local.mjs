@@ -11,6 +11,8 @@ const include = [
   "Panel.qml",
   "Reader.qml",
   "Overlay.qml",
+  "IconButton.qml",
+  "icons",
   "js",
   "data",
   "LICENSE",
