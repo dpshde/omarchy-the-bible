@@ -64,14 +64,66 @@ export function tryParse(input: string): ParseResult {
   return { ok: true, passage: plainPassage(value) };
 }
 
+function countExtra(kind: string, canonical: string): string {
+  if (kind === "book") {
+    const chapters = chapterCount(canonical);
+    if (!chapters) return "";
+    return `${chapters} chapter${chapters === 1 ? "" : "s"}`;
+  }
+
+  const [book, chapterToken] = String(canonical || "").split(".");
+  const chapter = Number.parseInt(chapterToken || "", 10);
+  if (!book || !Number.isFinite(chapter) || chapter < 1) return "";
+  const verses = verseCount(book, chapter);
+  if (!verses) return "";
+  return `${verses} verse${verses === 1 ? "" : "s"}`;
+}
+
 export function suggest(input: string, limit: number) {
   const cap = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 20) : 8;
-  return autocompletePassage(String(input || ""), { limit: cap }).map((item) => ({
-    label: item.label,
-    insertText: item.insertText,
-    canonical: item.canonical,
-    kind: item.kind
-  }));
+  return autocompletePassage(String(input || ""), { limit: cap }).map((item) => {
+    const extra = countExtra(item.kind, item.canonical);
+    return {
+      label: extra ? `${item.label}  ·  ${extra}` : item.label,
+      insertText: item.insertText,
+      canonical: item.canonical,
+      kind: item.kind,
+      extra
+    };
+  });
+}
+
+export function typingHint(input: string): string {
+  const trimmed = String(input || "").trim();
+  if (!trimmed) return "";
+
+  const verseMatch = trimmed.match(/^(.+?)\s+(\d+)\s*:\s*(\d*)(?:-(\d*))?$/);
+  if (verseMatch) {
+    const book = resolveBook(verseMatch[1] ?? "");
+    const chapter = Number.parseInt(verseMatch[2] ?? "", 10);
+    if (book && chapter >= 1) {
+      const verses = verseCount(book, chapter);
+      if (verses) return `${verses} verse${verses === 1 ? "" : "s"} in ${bookName(book)} ${chapter}`;
+    }
+  }
+
+  const chapterMatch = trimmed.match(/^(.+?)\s+(\d+)$/);
+  if (chapterMatch) {
+    const book = resolveBook(chapterMatch[1] ?? "");
+    const chapter = Number.parseInt(chapterMatch[2] ?? "", 10);
+    if (book && chapter >= 1 && chapter <= chapterCount(book)) {
+      const verses = verseCount(book, chapter);
+      if (verses) return `${verses} verse${verses === 1 ? "" : "s"} in ${bookName(book)} ${chapter}`;
+    }
+  }
+
+  const book = resolveBook(trimmed);
+  if (book) {
+    const chapters = chapterCount(book);
+    if (chapters) return `${chapters} chapter${chapters === 1 ? "" : "s"} in ${bookName(book)}`;
+  }
+
+  return "";
 }
 
 export function bookCodes(): string[] {

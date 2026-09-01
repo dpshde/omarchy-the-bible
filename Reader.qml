@@ -31,6 +31,7 @@ Item {
   property var suggestions: []
   property int suggestionIndex: -1
   property bool searchParsed: false
+  property string searchHint: ""
   property string bookFilter: ""
   property bool stateReady: false
   property bool dragging: false
@@ -172,26 +173,40 @@ Item {
   function refreshSuggestions() {
     var parsed = GrabBcv.tryParse(root.searchText)
     root.searchParsed = !!(parsed && parsed.ok)
-    var rows = root.searchParsed ? [] : GrabBcv.suggest(root.searchText, 6)
+    var rows = GrabBcv.suggest(root.searchText, 6)
     root.suggestions = rows
     root.suggestionIndex = rows.length > 0 ? 0 : -1
+    root.searchHint = GrabBcv.typingHint(root.searchText)
+    if (!root.searchHint && rows.length > 0 && rows[0].extra)
+      root.searchHint = rows[0].extra
+  }
+
+  function acceptTopSuggestion() {
+    var row = root.suggestions.length > 0 ? root.suggestions[0] : null
+    if (!row) return false
+    var insert = String(row.insertText || "").replace(/\s+$/g, "")
+    if (!insert) return false
+    insert = insert + " "
+    root.searchText = insert
+    searchField.text = insert
+    searchField.cursorPosition = insert.length
+    var parsed = GrabBcv.tryParse(row.insertText || row.canonical)
+    if (parsed && parsed.ok) root.applyParsed(parsed.passage, true)
+    Qt.callLater(function() {
+      searchField.forceActiveFocus()
+      searchField.cursorPosition = searchField.text.length
+    })
+    return true
   }
 
   function applySuggestion(row) {
     if (!row) return
-    var parsed = GrabBcv.tryParse(row.insertText || row.canonical)
-    if (parsed && parsed.ok) {
-      root.searchText = row.insertText || parsed.passage.display
-      searchField.text = root.searchText
-      root.applyParsed(parsed.passage, true)
-    }
+    root.suggestions = [row]
+    root.acceptTopSuggestion()
   }
 
   function submitSearch() {
-    if (root.suggestionIndex >= 0 && root.suggestions[root.suggestionIndex]) {
-      root.applySuggestion(root.suggestions[root.suggestionIndex])
-      return
-    }
+    if (root.acceptTopSuggestion()) return
     var parsed = GrabBcv.tryParse(root.searchText)
     if (!parsed || !parsed.ok) {
       root.searchError = parsed && parsed.message ? parsed.message : "Not a known reference"
@@ -202,6 +217,7 @@ Item {
     searchField.text = ""
     root.suggestions = []
     root.suggestionIndex = -1
+    root.searchHint = ""
   }
 
   function parsedOrSelection() {
@@ -466,8 +482,11 @@ Item {
             root.requestVerseFocus()
           }
           event.accepted = true
-        } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Tab) {
+        } else if (event.key === Qt.Key_Down) {
           root.enterVersesFromSearch()
+          event.accepted = true
+        } else if (event.key === Qt.Key_Tab) {
+          if (!root.acceptTopSuggestion()) root.enterVersesFromSearch()
           event.accepted = true
         } else if (event.key === Qt.Key_Up) {
           event.accepted = true
@@ -479,7 +498,7 @@ Item {
           event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
           if (event.modifiers & Qt.ControlModifier) root.routeNow()
-          else root.submitSearch()
+          else if (!root.acceptTopSuggestion()) root.submitSearch()
           event.accepted = true
         }
       }
@@ -500,15 +519,30 @@ Item {
       wrapMode: Text.WordWrap
     }
 
+    Text {
+      id: hintLabel
+      anchors.top: errorLabel.bottom
+      anchors.topMargin: visible ? Style.space(2) : 0
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: visible ? implicitHeight : 0
+      visible: root.searchActive && root.searchHint !== "" && root.searchError === ""
+      text: root.searchHint
+      color: root.muted
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      elide: Text.ElideRight
+    }
+
     Column {
       id: suggestionBox
-      anchors.top: errorLabel.bottom
+      anchors.top: hintLabel.bottom
       anchors.topMargin: visible ? Style.space(4) : 0
       anchors.left: parent.left
       anchors.right: parent.right
       height: visible ? implicitHeight : 0
       spacing: Style.space(2)
-      visible: root.searchActive && root.suggestions.length > 0 && root.mode === "read" && !root.searchParsed
+      visible: root.searchActive && root.suggestions.length > 0 && root.mode === "read"
 
       Repeater {
         model: root.suggestions

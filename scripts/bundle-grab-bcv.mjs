@@ -16,6 +16,7 @@ await bundlePragmaLibrary({
     "bookName",
     "chapterCount",
     "verseCount",
-    "resolveBook"
+    "resolveBook",
+    "typingHint"
   ]
 });

@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/selah-tools/labs/route-bible-omarchy/src/qml-api.ts. Do not edit by hand.
+// Generated from /home/dpshde/Developer/omarchy-route-bible/src/qml-api.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};
@@ -62,10 +62,11 @@ var GrabBcvApi = (function() {
     resolveBook: () => resolveBook,
     suggest: () => suggest,
     tryParse: () => tryParse,
+    typingHint: () => typingHint,
     verseCount: () => verseCount
   });
 
-  // ../../packages/grab-bcv/dist/chunk-DDWKUFQF.js
+  // node_modules/.pnpm/grab-bcv@0.1.7/node_modules/grab-bcv/dist/chunk-DDWKUFQF.js
   var OSIS_BOOK_CODES = Object.freeze([
     "GEN",
     "EXO",
@@ -591,7 +592,7 @@ var GrabBcvApi = (function() {
     return resolveFuzzyBookAlias(key);
   }
 
-  // ../../packages/grab-bcv/dist/chunk-7RCD6I7V.js
+  // node_modules/.pnpm/grab-bcv@0.1.7/node_modules/grab-bcv/dist/chunk-7RCD6I7V.js
   var DEFAULT_LIMIT = 8;
   var MAX_LIMIT = 50;
   var BOOK_NAME_KEYS = Object.freeze(
@@ -860,7 +861,7 @@ var GrabBcvApi = (function() {
     return suggestBooks(normalized, limit);
   }
 
-  // ../../packages/grab-bcv/dist/chunk-S3ACWDLD.js
+  // node_modules/.pnpm/grab-bcv@0.1.7/node_modules/grab-bcv/dist/chunk-S3ACWDLD.js
   function hasVerse(part) {
     return typeof part.verse === "number" && Number.isFinite(part.verse);
   }
@@ -2004,14 +2005,60 @@ var GrabBcvApi = (function() {
     }
     return { ok: true, passage: plainPassage(value) };
   }
+  function countExtra(kind, canonical) {
+    if (kind === "book") {
+      const chapters = chapterCount(canonical);
+      if (!chapters) return "";
+      return `${chapters} chapter${chapters === 1 ? "" : "s"}`;
+    }
+    const [book, chapterToken] = String(canonical || "").split(".");
+    const chapter = Number.parseInt(chapterToken || "", 10);
+    if (!book || !Number.isFinite(chapter) || chapter < 1) return "";
+    const verses = verseCount(book, chapter);
+    if (!verses) return "";
+    return `${verses} verse${verses === 1 ? "" : "s"}`;
+  }
   function suggest(input, limit) {
     const cap = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 20) : 8;
-    return autocompletePassage(String(input || ""), { limit: cap }).map((item) => ({
-      label: item.label,
-      insertText: item.insertText,
-      canonical: item.canonical,
-      kind: item.kind
-    }));
+    return autocompletePassage(String(input || ""), { limit: cap }).map((item) => {
+      const extra = countExtra(item.kind, item.canonical);
+      return {
+        label: extra ? `${item.label}  \xB7  ${extra}` : item.label,
+        insertText: item.insertText,
+        canonical: item.canonical,
+        kind: item.kind,
+        extra
+      };
+    });
+  }
+  function typingHint(input) {
+    var _a, _b, _c, _d;
+    const trimmed = String(input || "").trim();
+    if (!trimmed) return "";
+    const verseMatch = trimmed.match(/^(.+?)\s+(\d+)\s*:\s*(\d*)(?:-(\d*))?$/);
+    if (verseMatch) {
+      const book2 = resolveBook((_a = verseMatch[1]) != null ? _a : "");
+      const chapter = Number.parseInt((_b = verseMatch[2]) != null ? _b : "", 10);
+      if (book2 && chapter >= 1) {
+        const verses = verseCount(book2, chapter);
+        if (verses) return `${verses} verse${verses === 1 ? "" : "s"} in ${bookName(book2)} ${chapter}`;
+      }
+    }
+    const chapterMatch = trimmed.match(/^(.+?)\s+(\d+)$/);
+    if (chapterMatch) {
+      const book2 = resolveBook((_c = chapterMatch[1]) != null ? _c : "");
+      const chapter = Number.parseInt((_d = chapterMatch[2]) != null ? _d : "", 10);
+      if (book2 && chapter >= 1 && chapter <= chapterCount(book2)) {
+        const verses = verseCount(book2, chapter);
+        if (verses) return `${verses} verse${verses === 1 ? "" : "s"} in ${bookName(book2)} ${chapter}`;
+      }
+    }
+    const book = resolveBook(trimmed);
+    if (book) {
+      const chapters = chapterCount(book);
+      if (chapters) return `${chapters} chapter${chapters === 1 ? "" : "s"} in ${bookName(book)}`;
+    }
+    return "";
   }
   function bookCodes() {
     return [...OSIS_BOOK_CODES];
@@ -2047,3 +2094,4 @@ function bookName() { return GrabBcvApi.bookName.apply(null, arguments); }
 function chapterCount() { return GrabBcvApi.chapterCount.apply(null, arguments); }
 function verseCount() { return GrabBcvApi.verseCount.apply(null, arguments); }
 function resolveBook() { return GrabBcvApi.resolveBook.apply(null, arguments); }
+function typingHint() { return GrabBcvApi.typingHint.apply(null, arguments); }

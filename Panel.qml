@@ -85,8 +85,8 @@ Panel {
         var ctrl = event.modifiers & Qt.ControlModifier
 
         if (reader.searchActive) {
-          if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
-            root.switchPanel((event.modifiers & Qt.ShiftModifier) || event.key === Qt.Key_Backtab ? -1 : 1)
+          if (event.key === Qt.Key_Backtab) {
+            root.switchPanel(-1)
             event.accepted = true
           } else if (event.key === Qt.Key_Left) {
             reader.stepChapter(-1)
