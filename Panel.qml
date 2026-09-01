@@ -88,6 +88,11 @@ Panel {
           if (event.key === Qt.Key_Backtab) {
             root.switchPanel(-1)
             event.accepted = true
+          } else if (event.key === Qt.Key_Down) {
+            reader.enterVersesFromSearch()
+            event.accepted = true
+          } else if (event.key === Qt.Key_Up) {
+            event.accepted = true
           } else if (event.key === Qt.Key_Left) {
             reader.stepChapter(-1)
             event.accepted = true

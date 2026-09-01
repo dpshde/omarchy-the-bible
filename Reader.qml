@@ -292,8 +292,10 @@ Item {
     root.extending = false
     root.focusVerse = 1
     searchField.focus = false
-    root.requestVerseFocus()
-    Qt.callLater(root.scrollToFocus)
+    Qt.callLater(function() {
+      root.requestVerseFocus()
+      root.scrollToFocus()
+    })
   }
 
   function scrollToFocus() {
@@ -596,6 +598,9 @@ Item {
         spacing: Style.space(6)
         boundsBehavior: Flickable.StopAtBounds
         interactive: !root.dragging
+        keyNavigationEnabled: false
+        activeFocusOnTab: false
+        focus: false
         model: root.verses
 
         delegate: Item {
@@ -629,9 +634,10 @@ Item {
             id: verseText
             width: parent.width
             text: modelData.n + "  " + modelData.t
-            color: root.foreground
+            color: parent.hovered ? root.accent : root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
+            font.bold: parent.hovered
             wrapMode: Text.WordWrap
             padding: Style.space(4)
           }
