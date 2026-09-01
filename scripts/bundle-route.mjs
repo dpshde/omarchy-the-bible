@@ -9,5 +9,5 @@ await bundlePragmaLibrary({
   entry: join(lab, "src/route.ts"),
   outfile: join(lab, "js/Route.js"),
   globalName: "RouteApi",
-  exports: ["routeUrl"]
+  exports: ["routeUrl", "marginUrl"]
 });

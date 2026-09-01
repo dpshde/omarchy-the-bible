@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/selah-tools/labs/route-bible-omarchy/src/route.ts. Do not edit by hand.
+// Generated from /home/dpshde/Developer/omarchy-route-bible/src/route.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};
@@ -37,18 +37,30 @@ var RouteApi = (function() {
   // src/route.ts
   var route_exports = {};
   __export(route_exports, {
+    MARGIN_BASE: () => MARGIN_BASE,
     ROUTE_BASE: () => ROUTE_BASE,
     ROUTE_SRC: () => ROUTE_SRC,
+    marginUrl: () => marginUrl,
     routeUrl: () => routeUrl
   });
   var ROUTE_BASE = "https://www.route.bible";
   var ROUTE_SRC = "omarchy";
+  var MARGIN_BASE = "https://margin.bible";
+  function slugFor(canonical) {
+    return String(canonical || "").trim().toLowerCase().replace(/^\/+/, "");
+  }
   function routeUrl(canonical) {
-    const slug = String(canonical || "").trim().toLowerCase().replace(/^\/+/, "");
+    const slug = slugFor(canonical);
     if (!slug) return `${ROUTE_BASE}/?src=${ROUTE_SRC}`;
     return `${ROUTE_BASE}/${encodeURIComponent(slug)}?src=${ROUTE_SRC}`;
+  }
+  function marginUrl(canonical) {
+    const slug = slugFor(canonical);
+    if (!slug) return MARGIN_BASE;
+    return `${MARGIN_BASE}/${encodeURIComponent(slug)}`;
   }
   return __toCommonJS(route_exports);
 })();
 
 function routeUrl() { return RouteApi.routeUrl.apply(null, arguments); }
+function marginUrl() { return RouteApi.marginUrl.apply(null, arguments); }

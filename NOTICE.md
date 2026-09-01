@@ -14,3 +14,9 @@ https://arweave.net/B6yeNb3lk_VkiIp-fTWVh13TlM94LjLK6kC63BPXa8s
 
 User-visible product name is route.bible. This plugin opens canonical
 route.bible URLs; it is not a replacement for the website.
+
+## margin.bible
+
+Outline opens `https://margin.bible/{slug}` on the same grab-bcv / OSIS
+address as route.bible. Notes live in margin.bible; this plugin only
+launches the reader.

@@ -141,7 +141,8 @@ Item {
             return
           }
           if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            reader.routeNow()
+            if (shift) reader.outlineNow()
+            else reader.routeNow()
             event.accepted = true
             return
           }

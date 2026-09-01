@@ -49,6 +49,7 @@ Item {
   readonly property string compactLabel: Bible.formatCompact(root.selection, root.verseTotal)
   readonly property string displayLabel: Bible.formatDisplay(root.selection, GrabBcv.bookName(root.book), root.verseTotal)
   readonly property string routeLink: Route.routeUrl(root.canonical)
+  readonly property string marginLink: Route.marginUrl(root.canonical)
   readonly property bool searchActive: searchField.activeFocus
   readonly property var visibleBooks: {
     var codes = Bible.booksForTestament(root.testament, root.bookCodeList)
@@ -244,6 +245,13 @@ Item {
     root.requestClose()
   }
 
+  function outlineNow() {
+    var parsed = root.parsedOrSelection()
+    if (parsed) root.applyParsed(parsed, true)
+    Util.execArgv(["omarchy", "launch", "browser", root.marginLink])
+    root.requestClose()
+  }
+
   function copyUrl() {
     Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(root.routeLink) + " | wl-copy"])
   }
@@ -338,6 +346,7 @@ Item {
     if (t === "c" || t === "C") { root.mode = "chapters"; return }
     if (t === "g" || t === "G" || t === "/") { root.focusSearch(); return }
     if (t === "o" || t === "O") { root.routeNow(); return }
+    if (t === "m" || t === "M") { root.outlineNow(); return }
     if (t === "y" || t === "Y") { root.copyUrl(); return }
     if (t === "f" || t === "F") {
       if (root.expanded) root.requestCollapse()
@@ -508,6 +517,7 @@ Item {
           event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
           if (event.modifiers & Qt.ControlModifier) root.routeNow()
+          else if (event.modifiers & Qt.ShiftModifier) root.outlineNow()
           else if (!root.acceptTopSuggestion()) root.submitSearch()
           event.accepted = true
         }
@@ -768,6 +778,14 @@ Item {
           foreground: root.foreground
           tooltipText: "Copy text and URL"
           onClicked: root.copyText()
+        }
+
+        Button {
+          text: "Outline"
+          bordered: true
+          foreground: root.foreground
+          tooltipText: "Open this passage in the margin.bible outliner"
+          onClicked: root.outlineNow()
         }
 
         Button {
