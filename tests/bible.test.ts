@@ -5,6 +5,7 @@ import {
   normalizeIndex,
   parseState,
   prevChapter,
+  readerBlocks,
   selectedText,
   toCanonical
 } from "../src/bible";
@@ -101,5 +102,22 @@ describe("selectedText", () => {
     expect(text).toContain("(Genesis 1:1–2)");
     expect(text).toContain("1 In the beginning was the Word.");
     expect(text).toContain("2 He was with God in the beginning.");
+  });
+});
+
+describe("readerBlocks", () => {
+  it("pulls headers and refs out of the verse row", () => {
+    const headed = normalizeIndex({
+      "JHN.1": [
+        { n: 1, t: "In the beginning was the Word.", h: "The Beginning", r: "Genesis 1:1–2" },
+        { n: 2, t: "He was with God in the beginning." }
+      ]
+    });
+    expect(readerBlocks(headed, "JHN", 1)).toEqual([
+      { kind: "heading", text: "The Beginning", n: 0, t: "", spaced: false },
+      { kind: "refs", text: "Genesis 1:1–2", n: 0, t: "", spaced: false },
+      { kind: "verse", text: "", n: 1, t: "In the beginning was the Word.", spaced: false },
+      { kind: "verse", text: "", n: 2, t: "He was with God in the beginning.", spaced: false }
+    ]);
   });
 });

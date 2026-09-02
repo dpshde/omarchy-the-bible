@@ -55,6 +55,7 @@ Item {
   readonly property var bookCodeList: GrabBcv.bookCodes()
   readonly property int verseTotal: Bible.lastVerseNumber(root.bible, root.book, root.chapter)
   readonly property var verses: Bible.versesFor(root.bible, root.book, root.chapter)
+  readonly property var readerRows: Bible.readerBlocks(root.bible, root.book, root.chapter)
   readonly property var selection: ({
     book: root.book,
     chapter: root.chapter,
@@ -656,14 +657,28 @@ Item {
 
   function scrollToFocus() {
     if (!verseList.count) return
-    var idx = Math.max(0, Math.min(verseList.count - 1, root.focusVerse - 1))
+    var rows = root.readerRows
+    var idx = -1
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] && rows[i].kind === "verse" && rows[i].n === root.focusVerse) {
+        idx = i
+        break
+      }
+    }
+    if (idx < 0) return
     verseList.positionViewAtIndex(idx, ListView.Contain)
+  }
+
+  function verseAtRow(idx) {
+    var row = root.readerRows[idx]
+    if (!row || row.kind !== "verse") return 0
+    var n = Math.floor(Number(row.n) || 0)
+    return n >= 1 ? n : 0
   }
 
   function verseIndexAt(mouseY) {
     var mapped = verseList.mapToItem(verseList.contentItem, 8, mouseY)
-    var idx = verseList.indexAt(mapped.x, mapped.y)
-    return idx
+    return verseList.indexAt(mapped.x, mapped.y)
   }
 
   function handleEscape() {
@@ -970,41 +985,49 @@ Item {
         anchors.fill: parent
         clip: true
         visible: root.mode === "read"
-        spacing: Style.space(6)
+        spacing: Style.space(2)
         boundsBehavior: Flickable.StopAtBounds
         interactive: !root.dragging
         keyNavigationEnabled: false
         activeFocusOnTab: false
         focus: false
-        model: root.verses
+        model: root.readerRows
 
         delegate: Item {
-          id: verseDelegate
+          id: blockDelegate
           required property var modelData
           width: ListView.view ? ListView.view.width : 1
-          height: verseCol.implicitHeight
+          height: blockText.implicitHeight + topPad + bottomPad
 
+          readonly property string kind: String(modelData.kind || "verse")
+          readonly property bool isVerse: kind === "verse"
           readonly property int verseNum: Number(modelData.n)
-          readonly property string verseText: String(modelData.t || "")
-          readonly property string heading: String(modelData.heading || "")
-          readonly property string subhead: String(modelData.subhead || "")
-          readonly property string refs: String(modelData.refs || "")
-          readonly property bool selected: root.startVerse >= 1 && root.endVerse >= 1
+          readonly property string blockLabel: isVerse
+            ? (verseNum + "  " + String(modelData.t || ""))
+            : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
+          readonly property bool selected: isVerse && root.startVerse >= 1 && root.endVerse >= 1
             && verseNum >= Math.min(root.startVerse, root.endVerse)
             && verseNum <= Math.max(root.startVerse, root.endVerse)
-          readonly property bool hovered: !root.searchActive && verseNum === root.focusVerse
-          readonly property color copyColor: selected ? root.selectedTextColor : (hovered ? root.accent : root.foreground)
+          readonly property bool hovered: isVerse && !root.searchActive && verseNum === root.focusVerse
+          readonly property int topPad: {
+            if (kind === "heading" && modelData.spaced) return Style.space(16)
+            if (kind === "subhead" && modelData.spaced) return Style.space(10)
+            if (isVerse) return Style.space(3)
+            return Style.space(1)
+          }
+          readonly property int bottomPad: isVerse ? Style.space(3) : Style.space(1)
 
           Rectangle {
+            visible: blockDelegate.isVerse
             anchors.fill: parent
             radius: Style.cornerRadius
-            color: parent.selected
+            color: blockDelegate.selected
               ? root.selectionFill
-              : (parent.hovered ? root.hoverFill : "transparent")
+              : (blockDelegate.hovered ? root.hoverFill : "transparent")
           }
 
           Rectangle {
-            visible: parent.hovered
+            visible: blockDelegate.hovered
             width: Math.max(2, Style.space(2))
             anchors.left: parent.left
             anchors.top: parent.top
@@ -1013,57 +1036,26 @@ Item {
             color: root.accent
           }
 
-          Column {
-            id: verseCol
-            width: parent.width
-            spacing: Style.space(2)
-            topPadding: verseDelegate.heading !== "" && verseDelegate.verseNum > 1 ? Style.space(14) : Style.space(2)
-            leftPadding: Style.space(4)
-            rightPadding: Style.space(4)
-            bottomPadding: Style.space(4)
-
-            Text {
-              visible: verseDelegate.heading !== ""
-              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: verseDelegate.heading
-              color: verseDelegate.copyColor
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.subtitle
-              font.weight: Font.DemiBold
-              wrapMode: Text.WordWrap
-            }
-
-            Text {
-              visible: verseDelegate.subhead !== ""
-              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: verseDelegate.subhead
-              color: verseDelegate.selected ? root.selectedTextColor : (verseDelegate.hovered ? root.accent : root.muted)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              font.weight: Font.DemiBold
-              wrapMode: Text.WordWrap
-            }
-
-            Text {
-              visible: verseDelegate.refs !== ""
-              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: verseDelegate.refs !== "" ? ("(" + verseDelegate.refs + ")") : ""
-              color: verseDelegate.selected ? root.selectedTextColor : root.muted
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.italic: true
-              wrapMode: Text.WordWrap
-            }
-
-            Text {
-              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: verseDelegate.verseNum + "  " + verseDelegate.verseText
-              color: verseDelegate.copyColor
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              font.bold: verseDelegate.hovered
-              wrapMode: Text.WordWrap
-            }
+          Text {
+            id: blockText
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: Style.space(4)
+            anchors.rightMargin: Style.space(4)
+            anchors.topMargin: blockDelegate.topPad
+            text: blockDelegate.blockLabel
+            color: blockDelegate.isVerse
+              ? (blockDelegate.selected ? root.selectedTextColor : (blockDelegate.hovered ? root.accent : root.foreground))
+              : (blockDelegate.kind === "refs" ? root.muted : root.foreground)
+            font.family: root.fontFamily
+            font.pixelSize: blockDelegate.kind === "heading"
+              ? Style.font.subtitle
+              : (blockDelegate.kind === "refs" ? Style.font.caption : Style.font.bodySmall)
+            font.weight: blockDelegate.kind === "heading" || blockDelegate.kind === "subhead" ? Font.DemiBold : Font.Normal
+            font.italic: blockDelegate.kind === "refs"
+            font.bold: blockDelegate.hovered
+            wrapMode: Text.WordWrap
           }
         }
 
@@ -1075,9 +1067,8 @@ Item {
           cursorShape: Qt.IBeamCursor
           onPressed: function(mouse) {
             root.requestVerseFocus()
-            var idx = root.verseIndexAt(mouse.y)
-            if (idx < 0) return
-            var verse = root.verses[idx] ? root.verses[idx].n : idx + 1
+            var verse = root.verseAtRow(root.verseIndexAt(mouse.y))
+            if (!verse) return
             root.dragging = true
             if (mouse.modifiers & Qt.ShiftModifier) root.selectRange(root.anchorVerse, verse)
             else {
@@ -1086,9 +1077,14 @@ Item {
             }
           }
           onPositionChanged: function(mouse) {
-            var idx = root.verseIndexAt(mouse.y)
-            if (idx < 0) return
-            var verse = root.verses[idx] ? root.verses[idx].n : idx + 1
+            var verse = root.verseAtRow(root.verseIndexAt(mouse.y))
+            if (!verse) {
+              if (root.dragging) {
+                if (mouse.y < 24) verseList.flick(0, 420)
+                else if (mouse.y > height - 24) verseList.flick(0, -420)
+              }
+              return
+            }
             if (root.dragging) {
               root.selectRange(root.anchorVerse, verse)
               if (mouse.y < 24) verseList.flick(0, 420)

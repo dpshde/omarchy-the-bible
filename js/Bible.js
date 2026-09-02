@@ -75,6 +75,7 @@ var BibleApi = (function() {
     parseState: () => parseState,
     prevBook: () => prevBook,
     prevChapter: () => prevChapter,
+    readerBlocks: () => readerBlocks,
     selectedText: () => selectedText,
     serializeState: () => serializeState,
     testamentOf: () => testamentOf,
@@ -190,6 +191,24 @@ var BibleApi = (function() {
     if (!bible) return [];
     const rows = bible[chapterKey(book, chapter)];
     return Array.isArray(rows) ? rows : [];
+  }
+  function readerBlocks(bible, book, chapter) {
+    const rows = versesFor(bible, book, chapter).map((row) => normalizeVerse(row));
+    const blocks = [];
+    for (const row of rows) {
+      const spaced = blocks.length > 0;
+      if (row.heading) {
+        blocks.push({ kind: "heading", text: row.heading, n: 0, t: "", spaced });
+      }
+      if (row.subhead) {
+        blocks.push({ kind: "subhead", text: row.subhead, n: 0, t: "", spaced: blocks.length > 0 && !row.heading });
+      }
+      if (row.refs) {
+        blocks.push({ kind: "refs", text: row.refs, n: 0, t: "", spaced: false });
+      }
+      blocks.push({ kind: "verse", text: "", n: row.n, t: row.t, spaced: false });
+    }
+    return blocks;
   }
   function lastVerseNumber(bible, book, chapter) {
     var _a, _b;
@@ -357,6 +376,7 @@ function chapterKey() { return BibleApi.chapterKey.apply(null, arguments); }
 function normalizeIndex() { return BibleApi.normalizeIndex.apply(null, arguments); }
 function normalizeVerse() { return BibleApi.normalizeVerse.apply(null, arguments); }
 function versesFor() { return BibleApi.versesFor.apply(null, arguments); }
+function readerBlocks() { return BibleApi.readerBlocks.apply(null, arguments); }
 function lastVerseNumber() { return BibleApi.lastVerseNumber.apply(null, arguments); }
 function clampVerse() { return BibleApi.clampVerse.apply(null, arguments); }
 function orderedRange() { return BibleApi.orderedRange.apply(null, arguments); }

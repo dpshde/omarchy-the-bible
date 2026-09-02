@@ -17,6 +17,7 @@ await bundlePragmaLibrary({
     "normalizeIndex",
     "normalizeVerse",
     "versesFor",
+    "readerBlocks",
     "lastVerseNumber",
     "clampVerse",
     "orderedRange",

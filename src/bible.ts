@@ -136,6 +136,33 @@ export function versesFor(bible: BibleIndex | null | undefined, book: string, ch
   return Array.isArray(rows) ? rows : [];
 }
 
+export type ReaderBlock = {
+  kind: "heading" | "subhead" | "refs" | "verse";
+  text: string;
+  n: number;
+  t: string;
+  spaced: boolean;
+};
+
+export function readerBlocks(bible: BibleIndex | null | undefined, book: string, chapter: number): ReaderBlock[] {
+  const rows = versesFor(bible, book, chapter).map((row) => normalizeVerse(row));
+  const blocks: ReaderBlock[] = [];
+  for (const row of rows) {
+    const spaced = blocks.length > 0;
+    if (row.heading) {
+      blocks.push({ kind: "heading", text: row.heading, n: 0, t: "", spaced });
+    }
+    if (row.subhead) {
+      blocks.push({ kind: "subhead", text: row.subhead, n: 0, t: "", spaced: blocks.length > 0 && !row.heading });
+    }
+    if (row.refs) {
+      blocks.push({ kind: "refs", text: row.refs, n: 0, t: "", spaced: false });
+    }
+    blocks.push({ kind: "verse", text: "", n: row.n, t: row.t, spaced: false });
+  }
+  return blocks;
+}
+
 export function lastVerseNumber(bible: BibleIndex | null | undefined, book: string, chapter: number): number {
   const rows = versesFor(bible, book, chapter);
   if (rows.length === 0) return 1;
