@@ -1166,8 +1166,20 @@ Item {
                 readonly property int n: Math.floor(Number(modelData.n) || 0)
                 readonly property bool showNum: !!modelData.showNum
                 readonly property int numGap: showNum ? Style.space(4) : 0
-                width: Math.min(numLabel.implicitWidth + numGap + runText.implicitWidth, flow.width)
-                height: Math.max(numLabel.visible ? numLabel.implicitHeight : 0, runText.implicitHeight)
+                readonly property int numW: showNum ? Math.ceil(numLabel.implicitWidth) + numGap : 0
+                readonly property int bodyW: Math.min(Math.ceil(bodyMetrics.implicitWidth), Math.max(1, flow.width - numW))
+                width: numW + bodyW
+                height: Math.max(showNum ? numLabel.implicitHeight : 0, runText.implicitHeight)
+
+                Text {
+                  id: bodyMetrics
+                  visible: false
+                  text: String(run.modelData.t || "")
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.italic: blockDelegate.kind === "d"
+                  wrapMode: Text.NoWrap
+                }
 
                 Text {
                   id: numLabel
@@ -1178,17 +1190,15 @@ Item {
                   font.family: root.fontFamily
                   font.pixelSize: Math.max(8, Math.round(Style.font.bodySmall * 0.7))
                   font.weight: Font.Normal
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.topMargin: Math.max(0, Math.round(Style.font.bodySmall * 0.2))
+                  wrapMode: Text.NoWrap
+                  x: 0
+                  y: Math.max(0, Math.round((Style.font.bodySmall - font.pixelSize) * 0.35))
                 }
 
                 Text {
                   id: runText
-                  anchors.left: run.showNum ? numLabel.right : parent.left
-                  anchors.leftMargin: run.numGap
-                  anchors.right: parent.right
-                  anchors.top: parent.top
+                  x: run.numW
+                  width: run.bodyW
                   wrapMode: Text.WordWrap
                   text: String(run.modelData.t || "")
                   color: blockDelegate.selected
