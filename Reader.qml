@@ -162,21 +162,32 @@ Item {
   }
 
   function colorHtml(c) {
-    return String(c || "")
+    var s = String(c || "")
+    if (s.length === 9 && s.charAt(0) === "#") return "#" + s.slice(3)
+    return s
   }
 
-  function pubHtml(parts) {
+  function pubHtml(parts, focusVerse, startVerse, endVerse) {
     var html = "<style type=\"text/css\">a { text-decoration: none; }</style>"
     var list = parts || []
+    var selStart = Math.min(Number(startVerse) || 0, Number(endVerse) || 0)
+    var selEnd = Math.max(Number(startVerse) || 0, Number(endVerse) || 0)
     for (var i = 0; i < list.length; i++) {
       var part = list[i]
       var n = Math.floor(Number(part.n) || 0)
+      var selected = selStart >= 1 && n >= selStart && n <= selEnd
+      var hovered = !root.searchActive && n === Number(focusVerse) && !selected
+      var fg = selected
+        ? root.selectedTextColor
+        : (hovered || part.wj ? root.accent : root.foreground)
+      var bg = selected ? root.selectionFill : (hovered ? root.hoverFill : "")
       var body = root.escapeHtml(part.t)
-      if (part.wj) body = "<font color=\"" + root.colorHtml(root.accent) + "\">" + body + "</font>"
       var num = part.showNum
-        ? "<font color=\"" + root.colorHtml(root.muted) + "\">" + n + "</font> "
+        ? "<font color=\"" + root.colorHtml(selected || hovered ? fg : root.muted) + "\">" + n + "</font> "
         : ""
-      html += "<a href=\"v:" + n + "\" style=\"text-decoration:none; color:" + root.colorHtml(root.foreground) + ";\">" + num + body + "</a>"
+      var style = "text-decoration:none; color:" + root.colorHtml(fg) + ";"
+      if (bg) style += " background-color:" + root.colorHtml(bg) + ";"
+      html += "<a href=\"v:" + n + "\" style=\"" + style + "\">" + num + body + "</a>"
       if (i < list.length - 1) html += " "
     }
     return html
@@ -1107,28 +1118,10 @@ Item {
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
-          readonly property bool selected: {
-            if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
-            if (isVerse)
-              return verseNum >= Math.min(root.startVerse, root.endVerse)
-                && verseNum <= Math.max(root.startVerse, root.endVerse)
-            if (!isFlow) return false
-            for (var i = 0; i < parts.length; i++) {
-              var n = Number(parts[i].n)
-              if (n >= Math.min(root.startVerse, root.endVerse) && n <= Math.max(root.startVerse, root.endVerse))
-                return true
-            }
-            return false
-          }
-          readonly property bool hovered: {
-            if (root.searchActive) return false
-            if (isVerse) return verseNum === root.focusVerse
-            if (!isFlow) return false
-            for (var i = 0; i < parts.length; i++) {
-              if (Number(parts[i].n) === root.focusVerse) return true
-            }
-            return false
-          }
+          readonly property bool selected: isVerse && root.startVerse >= 1 && root.endVerse >= 1
+            && verseNum >= Math.min(root.startVerse, root.endVerse)
+            && verseNum <= Math.max(root.startVerse, root.endVerse)
+          readonly property bool hovered: isVerse && !root.searchActive && verseNum === root.focusVerse
           readonly property int topPad: {
             if (kind === "heading" && modelData.spaced) return Style.space(16)
             if (kind === "subhead" && modelData.spaced) return Style.space(10)
@@ -1139,7 +1132,7 @@ Item {
           readonly property int bottomPad: isVerse || isFlow ? Style.space(3) : Style.space(1)
 
           Rectangle {
-            visible: blockDelegate.isVerse || blockDelegate.isFlow
+            visible: blockDelegate.isVerse
             anchors.fill: parent
             radius: Style.cornerRadius
             color: blockDelegate.selected
@@ -1166,7 +1159,9 @@ Item {
             anchors.rightMargin: Style.space(4)
             anchors.topMargin: blockDelegate.topPad
             visible: blockDelegate.kind !== "blank"
-            text: blockDelegate.isFlow ? root.pubHtml(blockDelegate.parts) : blockDelegate.blockLabel
+            text: blockDelegate.isFlow
+              ? root.pubHtml(blockDelegate.parts, root.focusVerse, root.startVerse, root.endVerse)
+              : blockDelegate.blockLabel
             textFormat: blockDelegate.isFlow ? Text.RichText : Text.PlainText
             linkColor: root.foreground
             color: blockDelegate.isVerse
