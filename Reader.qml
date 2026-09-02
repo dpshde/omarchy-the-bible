@@ -150,7 +150,6 @@ Item {
     if (!root.expanded) return
     root.publication = !root.publication
     if (root.publication) root.pubRequested = true
-    if (pubBtn) pubBtn.pulse()
     root.persist()
   }
 
@@ -903,12 +902,16 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(6)
 
-        IconButton {
+        Button {
           id: pubBtn
           visible: root.expanded
-          iconSource: Qt.resolvedUrl("icons/publication.svg")
-          foreground: root.publication ? root.accent : root.foreground
-          tooltipText: root.publication ? "Verse list" : "Publication layout"
+          text: "USFM"
+          selected: root.publication
+          bordered: true
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          tooltipText: root.publication ? "Show verse list" : "Show publication layout"
           onClicked: root.togglePublication()
         }
 
