@@ -166,7 +166,7 @@ Item {
   }
 
   function pubHtml(parts) {
-    var html = ""
+    var html = "<style type=\"text/css\">a { text-decoration: none; }</style>"
     var list = parts || []
     for (var i = 0; i < list.length; i++) {
       var part = list[i]
@@ -176,7 +176,7 @@ Item {
       var num = part.showNum
         ? "<font color=\"" + root.colorHtml(root.muted) + "\">" + n + "</font> "
         : ""
-      html += "<a href=\"v:" + n + "\"><font color=\"" + root.colorHtml(root.foreground) + "\">" + num + body + "</font></a>"
+      html += "<a href=\"v:" + n + "\" style=\"text-decoration:none; color:" + root.colorHtml(root.foreground) + ";\">" + num + body + "</a>"
       if (i < list.length - 1) html += " "
     }
     return html
@@ -1167,7 +1167,8 @@ Item {
             anchors.topMargin: blockDelegate.topPad
             visible: blockDelegate.kind !== "blank"
             text: blockDelegate.isFlow ? root.pubHtml(blockDelegate.parts) : blockDelegate.blockLabel
-            textFormat: blockDelegate.isFlow ? Text.StyledText : Text.PlainText
+            textFormat: blockDelegate.isFlow ? Text.RichText : Text.PlainText
+            linkColor: root.foreground
             color: blockDelegate.isVerse
               ? (blockDelegate.selected ? root.selectedTextColor : (blockDelegate.hovered ? root.accent : root.foreground))
               : (blockDelegate.kind === "refs" || blockDelegate.kind === "d" ? root.muted : root.foreground)
