@@ -2,7 +2,7 @@
 
 Read the Berean Standard Bible from the Omarchy bar, select verses, and open them on [route.bible](https://route.bible).
 
-Plugin id: `io.github.dpshde.the-bible`.
+Plugin id: `io.github.dpshde.the-bible`. That id is permanent after marketplace listing. The marketplace and user-visible name is **The Bible** (not Canon or Selah).
 
 The default surface is a **right-side popup** from the bar chip. Use the **expand** button (or `f`) to open the fullscreen overlay.
 
@@ -61,7 +61,7 @@ o.bind("SUPER + SHIFT + B", "The Bible", "omarchy-shell shell summon io.github.d
 omarchy bar move io.github.dpshde.the-bible --section right
 ```
 
-Reading position is stored at `~/.local/state/omarchy/settings/route-bible.json`. The plugin creates that file if needed and does not touch other settings.
+Reading position is stored at `~/.local/state/omarchy/settings/route-bible.json`. The plugin creates that file if needed and does not touch other settings. Reads and writes go through `safe-state.py` (`python3`) so the path must be a user-owned regular file, not a symlink, and stays under 2 KB.
 
 ## Remove
 
@@ -77,7 +77,7 @@ The plugin is MIT-licensed. See `LICENSE` and `NOTICE.md`.
 
 Runtime:
 
-- Bundled [Berean Standard Bible](https://berean.bible/) text and section headers (public domain), fetched at build time from the official [USJ pack](https://bereanbible.com/bsb_usj.zip). Verse lookup does not call the network.
+- Bundled [Berean Standard Bible](https://berean.bible/) text and section headers (public domain), fetched at build time from the official [USJ pack](https://bereanbible.com/bsb_usj.zip) and pinned by SHA-256 in `scripts/fetch-bsb.mjs`. Verse lookup does not call the network.
 - Bundled [grab-bcv](https://www.npmjs.com/package/grab-bcv) parser (`js/GrabBcv.js`).
 - Opens [route.bible](https://route.bible) and [margin.bible](https://margin.bible) with `omarchy launch browser` when you ask it to.
 - Copies text and URLs with `wl-copy`.

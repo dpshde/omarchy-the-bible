@@ -18,6 +18,7 @@ const include = [
   "LICENSE",
   "NOTICE.md",
   "README.md",
+  "safe-state.py",
   "preview.png",
   "screenshots"
 ];

@@ -58,7 +58,14 @@ var BibleApi = (function() {
     DEFAULT_BOOK: () => DEFAULT_BOOK,
     DEFAULT_CHAPTER: () => DEFAULT_CHAPTER,
     DEFAULT_VERSE: () => DEFAULT_VERSE,
+    MAX_CHAPTER: () => MAX_CHAPTER,
+    MAX_INDEX_BYTES: () => MAX_INDEX_BYTES,
+    MAX_PUB_BYTES: () => MAX_PUB_BYTES,
+    MAX_STATE_BYTES: () => MAX_STATE_BYTES,
+    MAX_VERSE: () => MAX_VERSE,
     OT_BOOK_COUNT: () => OT_BOOK_COUNT,
+    assertBibleIndex: () => assertBibleIndex,
+    assertPubIndex: () => assertPubIndex,
     booksForTestament: () => booksForTestament,
     chapterKey: () => chapterKey,
     clampVerse: () => clampVerse,
@@ -68,13 +75,18 @@ var BibleApi = (function() {
     formatCompact: () => formatCompact,
     formatDisplay: () => formatDisplay,
     hasVerseSelection: () => hasVerseSelection,
+    isChapterKey: () => isChapterKey,
+    isKnownBook: () => isKnownBook,
     isWholeChapter: () => isWholeChapter,
+    jsonBoundsOk: () => jsonBoundsOk,
     lastVerseNumber: () => lastVerseNumber,
     nextBook: () => nextBook,
     nextChapter: () => nextChapter,
     normalizeIndex: () => normalizeIndex,
     normalizeVerse: () => normalizeVerse,
     orderedRange: () => orderedRange,
+    parseIndex: () => parseIndex,
+    parsePublication: () => parsePublication,
     parseRefInput: () => parseRefInput,
     parseState: () => parseState,
     prevBook: () => prevBook,
@@ -84,10 +96,95 @@ var BibleApi = (function() {
     selectedText: () => selectedText,
     serializeState: () => serializeState,
     splitRefs: () => splitRefs,
+    stateMaxBytes: () => stateMaxBytes,
     testamentOf: () => testamentOf,
     toCanonical: () => toCanonical,
     versesFor: () => versesFor
   });
+
+  // src/limits.ts
+  var MAX_INDEX_BYTES = 6e6;
+  var MAX_PUB_BYTES = 16e6;
+  var MAX_STATE_BYTES = 2048;
+  var MAX_CHAPTER_KEYS = 1300;
+  var MIN_CHAPTER_KEYS = 1e3;
+  var CANON_CHAPTER_COUNT = 1189;
+  var CANON_BOOK_COUNT = 66;
+  var MAX_VERSES_PER_CHAPTER = 200;
+  var MAX_BLOCKS_PER_CHAPTER = 600;
+  var MAX_PARTS_PER_BLOCK = 32;
+  var MAX_STRING_CHARS = 4096;
+  var MAX_JSON_DEPTH_INDEX = 4;
+  var MAX_JSON_DEPTH_PUB = 6;
+  var MAX_JSON_DEPTH_STATE = 3;
+  var MAX_CHAPTER = 150;
+  var MAX_VERSE = 200;
+  var PUB_KINDS = [
+    "heading",
+    "subhead",
+    "refs",
+    "blank",
+    "para",
+    "q1",
+    "q2",
+    "li",
+    "d"
+  ];
+  function jsonBoundsOk(raw, maxBytes, maxDepth) {
+    if (typeof raw !== "string") return false;
+    if (raw.length > maxBytes) return false;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw.charCodeAt(i);
+      if (inString) {
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch === 92) {
+          escape = true;
+          continue;
+        }
+        if (ch === 34) inString = false;
+        continue;
+      }
+      if (ch === 34) {
+        inString = true;
+        continue;
+      }
+      if (ch === 123 || ch === 91) {
+        depth += 1;
+        if (depth > maxDepth) return false;
+        continue;
+      }
+      if (ch === 125 || ch === 93) {
+        depth -= 1;
+        if (depth < 0) return false;
+      }
+    }
+    return depth === 0 && !inString;
+  }
+  function boundString(value, max = MAX_STRING_CHARS) {
+    if (value == null) return "";
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+      return null;
+    }
+    const text = String(value);
+    if (text.length > max) return null;
+    return text;
+  }
+  function boundInt(value, min, max) {
+    if (typeof value === "boolean") return null;
+    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+    if (!Number.isFinite(n)) return null;
+    const whole = Math.floor(n);
+    if (whole < min || whole > max) return null;
+    return whole;
+  }
+
+  // src/bible.ts
   var DEFAULT_BOOK = "JHN";
   var DEFAULT_CHAPTER = 3;
   var DEFAULT_VERSE = 16;
@@ -172,31 +269,115 @@ var BibleApi = (function() {
   function chapterKey(book, chapter) {
     return `${book}.${chapter}`;
   }
+  function isKnownBook(book) {
+    return Object.prototype.hasOwnProperty.call(BOOK_ABBREV, book);
+  }
+  function isChapterKey(key) {
+    const split = String(key || "").split(".");
+    if (split.length !== 2) return false;
+    const [book, chapterToken] = split;
+    if (!book || !isKnownBook(book)) return false;
+    const chapter = boundInt(chapterToken, 1, MAX_CHAPTER);
+    return chapter != null;
+  }
+  function clipString(value) {
+    const text = boundString(value, MAX_STRING_CHARS);
+    return text == null ? "" : text;
+  }
   function normalizeVerse(row) {
-    const heading = String(row.heading || row.h || "");
-    const subhead = String(row.subhead || row.s || "");
-    const refs = String(row.refs || row.r || "");
+    var _a;
+    const heading = clipString(row.heading || row.h || "");
+    const subhead = clipString(row.subhead || row.s || "");
+    const refs = clipString(row.refs || row.r || "");
+    const n = (_a = boundInt(row.n, 0, MAX_VERSE)) != null ? _a : 0;
     return {
-      n: Math.floor(Number(row.n) || 0),
-      t: String(row.t || ""),
+      n,
+      t: clipString(row.t || ""),
       heading,
       subhead,
       refs
     };
   }
-  function normalizeIndex(bible) {
-    const out = {};
-    if (!bible) return out;
-    for (const [key, rows] of Object.entries(bible)) {
-      if (!Array.isArray(rows)) continue;
-      out[key] = rows.map((row) => normalizeVerse(row));
+  function sanitizeVerseRow(row) {
+    var _a, _b, _c, _d, _e, _f;
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const rec = row;
+    const n = boundInt(rec.n, 1, MAX_VERSE);
+    const t = boundString(rec.t);
+    const heading = boundString((_b = (_a = rec.heading) != null ? _a : rec.h) != null ? _b : "");
+    const subhead = boundString((_d = (_c = rec.subhead) != null ? _c : rec.s) != null ? _d : "");
+    const refs = boundString((_f = (_e = rec.refs) != null ? _e : rec.r) != null ? _f : "");
+    if (n == null || t == null || heading == null || subhead == null || refs == null) return null;
+    return { n, t, heading, subhead, refs };
+  }
+  function sanitizeVerseRows(rows) {
+    if (!Array.isArray(rows) || rows.length > MAX_VERSES_PER_CHAPTER) return null;
+    const out = [];
+    for (const row of rows) {
+      const next = sanitizeVerseRow(row);
+      if (!next) return null;
+      out.push(next);
     }
     return out;
   }
+  function normalizeIndex(bible) {
+    const out = /* @__PURE__ */ Object.create(null);
+    if (!bible || typeof bible !== "object" || Array.isArray(bible)) return out;
+    for (const [key, rows] of Object.entries(bible)) {
+      if (!isChapterKey(key)) continue;
+      const next = sanitizeVerseRows(rows);
+      if (!next) continue;
+      out[key] = next;
+    }
+    return out;
+  }
+  function parseObject(raw, maxBytes, maxDepth) {
+    const text = String(raw || "");
+    if (!jsonBoundsOk(text, maxBytes, maxDepth)) return null;
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+  function parseIndex(raw) {
+    const parsed = parseObject(raw, MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX);
+    if (!parsed) return null;
+    const keys = Object.keys(parsed);
+    if (keys.length < MIN_CHAPTER_KEYS || keys.length > MAX_CHAPTER_KEYS) return null;
+    const out = /* @__PURE__ */ Object.create(null);
+    for (const key of keys) {
+      if (!isChapterKey(key)) return null;
+      const rows = sanitizeVerseRows(parsed[key]);
+      if (!rows || rows.length < 1) return null;
+      out[key] = rows;
+    }
+    return out;
+  }
+  function assertBibleIndex(index) {
+    const keys = Object.keys(index);
+    if (keys.length !== CANON_CHAPTER_COUNT) {
+      throw new Error(`bible chapter count ${keys.length}, expected ${CANON_CHAPTER_COUNT}`);
+    }
+    if (keys.length > MAX_CHAPTER_KEYS) {
+      throw new Error(`bible chapter count ${keys.length} exceeds max`);
+    }
+    const books = new Set(keys.map((key) => key.split(".")[0]));
+    if (books.size !== CANON_BOOK_COUNT) {
+      throw new Error(`bible book count ${books.size}, expected ${CANON_BOOK_COUNT}`);
+    }
+    for (const book of Object.keys(BOOK_ABBREV)) {
+      if (!index[`${book}.1`]) throw new Error(`missing ${book}.1`);
+    }
+  }
   function versesFor(bible, book, chapter) {
-    if (!bible) return [];
-    const rows = bible[chapterKey(book, chapter)];
-    return Array.isArray(rows) ? rows : [];
+    if (!bible || !isKnownBook(book)) return [];
+    const chapterNum = boundInt(chapter, 1, MAX_CHAPTER);
+    if (chapterNum == null) return [];
+    const rows = sanitizeVerseRows(bible[chapterKey(book, chapterNum)]);
+    return rows || [];
   }
   var FLOW_KINDS = /* @__PURE__ */ new Set(["para", "q1", "q2", "li", "d"]);
   var BRIDGE_KINDS = /* @__PURE__ */ new Set(["blank"]);
@@ -228,11 +409,86 @@ var BibleApi = (function() {
   function parseRefInput(text) {
     return String(text || "").trim().replace(/[–—]/g, "-");
   }
+  var PUB_KIND_SET = new Set(PUB_KINDS);
+  function sanitizePubPart(part) {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return null;
+    const rec = part;
+    const n = boundInt(rec.n, 1, MAX_VERSE);
+    const t = boundString(rec.t);
+    if (n == null || t == null) return null;
+    return {
+      n,
+      t,
+      wj: rec.wj === true,
+      showNum: rec.showNum === true
+    };
+  }
+  function sanitizePubBlock(row) {
+    var _a;
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const rec = row;
+    const kind = boundString(rec.kind, 16);
+    if (kind == null || !PUB_KIND_SET.has(kind)) return null;
+    const text = boundString(rec.text);
+    const indent = boundInt((_a = rec.indent) != null ? _a : 0, 0, 4);
+    if (text == null || indent == null) return null;
+    if (!Array.isArray(rec.parts) || rec.parts.length > MAX_PARTS_PER_BLOCK) return null;
+    const parts = [];
+    for (const part of rec.parts) {
+      const next = sanitizePubPart(part);
+      if (!next) return null;
+      parts.push(next);
+    }
+    return {
+      kind,
+      spaced: rec.spaced === true,
+      indent,
+      text,
+      parts
+    };
+  }
+  function sanitizePubBlocks(rows) {
+    if (!Array.isArray(rows) || rows.length > MAX_BLOCKS_PER_CHAPTER) return null;
+    const out = [];
+    for (const row of rows) {
+      const next = sanitizePubBlock(row);
+      if (!next) return null;
+      out.push(next);
+    }
+    return out;
+  }
+  function parsePublication(raw) {
+    const parsed = parseObject(raw, MAX_PUB_BYTES, MAX_JSON_DEPTH_PUB);
+    if (!parsed) return null;
+    const keys = Object.keys(parsed);
+    if (keys.length < MIN_CHAPTER_KEYS || keys.length > MAX_CHAPTER_KEYS) return null;
+    const out = /* @__PURE__ */ Object.create(null);
+    for (const key of keys) {
+      if (!isChapterKey(key)) return null;
+      const rows = sanitizePubBlocks(parsed[key]);
+      if (!rows || rows.length < 1) return null;
+      out[key] = rows;
+    }
+    return out;
+  }
+  function assertPubIndex(pub) {
+    const keys = Object.keys(pub);
+    if (keys.length !== CANON_CHAPTER_COUNT) {
+      throw new Error(`publication chapter count ${keys.length}, expected ${CANON_CHAPTER_COUNT}`);
+    }
+    const books = new Set(keys.map((key) => key.split(".")[0]));
+    if (books.size !== CANON_BOOK_COUNT) {
+      throw new Error(`publication book count ${books.size}, expected ${CANON_BOOK_COUNT}`);
+    }
+  }
   function pubBlocks(pub, book, chapter) {
-    if (!pub) return [];
-    const rows = pub[chapterKey(book, chapter)];
-    if (!Array.isArray(rows)) return [];
-    const out = rows.map((row) => __spreadProps(__spreadValues({}, row), { join: false, joinNext: false, fillVerse: 0 }));
+    if (!pub || !isKnownBook(book)) return [];
+    const chapterNum = boundInt(chapter, 1, MAX_CHAPTER);
+    if (chapterNum == null) return [];
+    const rows = pub[chapterKey(book, chapterNum)];
+    const sanitized = sanitizePubBlocks(rows);
+    if (!sanitized) return [];
+    const out = sanitized.map((row) => __spreadProps(__spreadValues({}, row), { join: false, joinNext: false, fillVerse: 0 }));
     for (let i = 0; i < out.length; i++) {
       if (!isFlow(out[i])) continue;
       const next = nextFlowIndex(out, i + 1);
@@ -390,6 +646,9 @@ var BibleApi = (function() {
       return parts.join("\n");
     }).join("\n");
   }
+  function stateMaxBytes() {
+    return MAX_STATE_BYTES;
+  }
   function serializeState(selection, extras) {
     return JSON.stringify({
       book: selection.book,
@@ -399,12 +658,22 @@ var BibleApi = (function() {
       publication: (extras == null ? void 0 : extras.publication) === true
     });
   }
+  function fallbackState(fallback) {
+    var _a, _b, _c;
+    return {
+      book: isKnownBook(fallback.book) ? fallback.book : DEFAULT_BOOK,
+      chapter: (_a = boundInt(fallback.chapter, 1, MAX_CHAPTER)) != null ? _a : DEFAULT_CHAPTER,
+      startVerse: (_b = boundInt(fallback.startVerse, 0, MAX_VERSE)) != null ? _b : DEFAULT_VERSE,
+      endVerse: (_c = boundInt(fallback.endVerse, 0, MAX_VERSE)) != null ? _c : DEFAULT_VERSE,
+      publication: false
+    };
+  }
   function parseVerseBound(value, fallback) {
     if (value === 0 || value === "0") return 0;
-    if (value === void 0 || value === null || value === "") return fallback;
-    const n = Math.floor(Number(value));
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(0, n);
+    if (value === void 0 || value === null || value === "") {
+      return boundInt(fallback, 0, MAX_VERSE);
+    }
+    return boundInt(value, 0, MAX_VERSE);
   }
   function parseState(raw, fallback = {
     book: DEFAULT_BOOK,
@@ -412,20 +681,32 @@ var BibleApi = (function() {
     startVerse: DEFAULT_VERSE,
     endVerse: DEFAULT_VERSE
   }) {
-    const publicationFallback = false;
+    const safe = fallbackState(fallback);
+    const text = String(raw || "{}");
+    if (!jsonBoundsOk(text, MAX_STATE_BYTES, MAX_JSON_DEPTH_STATE)) return safe;
     try {
-      const parsed = JSON.parse(String(raw || "{}"));
-      const book = typeof parsed.book === "string" && parsed.book ? parsed.book : fallback.book;
-      const chapter = Math.max(1, Math.floor(Number(parsed.chapter) || fallback.chapter));
-      const startVerse = parseVerseBound(parsed.startVerse, fallback.startVerse);
-      const endVerse = parseVerseBound(parsed.endVerse, startVerse === 0 ? 0 : fallback.endVerse);
-      const publication = parsed.publication === true;
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return safe;
+      const rec = parsed;
+      if (typeof rec.book !== "string" || !isKnownBook(rec.book)) return safe;
+      const chapter = boundInt(rec.chapter, 1, MAX_CHAPTER);
+      if (chapter == null) return safe;
+      const startVerse = parseVerseBound(rec.startVerse, safe.startVerse);
+      const endVerse = parseVerseBound(rec.endVerse, startVerse === 0 ? 0 : safe.endVerse);
+      if (startVerse == null || endVerse == null) return safe;
+      const publication = rec.publication === true;
       if (startVerse < 1 || endVerse < 1) {
-        return { book, chapter, startVerse: 0, endVerse: 0, publication };
+        return { book: rec.book, chapter, startVerse: 0, endVerse: 0, publication };
       }
-      return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse), publication };
+      return {
+        book: rec.book,
+        chapter,
+        startVerse,
+        endVerse: Math.max(startVerse, endVerse),
+        publication
+      };
     } catch (e) {
-      return __spreadProps(__spreadValues({}, fallback), { publication: publicationFallback });
+      return safe;
     }
   }
   return __toCommonJS(bible_exports);
@@ -437,6 +718,8 @@ function defaultVerse() { return BibleApi.defaultVerse.apply(null, arguments); }
 function chapterKey() { return BibleApi.chapterKey.apply(null, arguments); }
 function normalizeIndex() { return BibleApi.normalizeIndex.apply(null, arguments); }
 function normalizeVerse() { return BibleApi.normalizeVerse.apply(null, arguments); }
+function parseIndex() { return BibleApi.parseIndex.apply(null, arguments); }
+function parsePublication() { return BibleApi.parsePublication.apply(null, arguments); }
 function versesFor() { return BibleApi.versesFor.apply(null, arguments); }
 function readerBlocks() { return BibleApi.readerBlocks.apply(null, arguments); }
 function pubBlocks() { return BibleApi.pubBlocks.apply(null, arguments); }
@@ -459,3 +742,5 @@ function booksForTestament() { return BibleApi.booksForTestament.apply(null, arg
 function selectedText() { return BibleApi.selectedText.apply(null, arguments); }
 function serializeState() { return BibleApi.serializeState.apply(null, arguments); }
 function parseState() { return BibleApi.parseState.apply(null, arguments); }
+function stateMaxBytes() { return BibleApi.stateMaxBytes.apply(null, arguments); }
+function isKnownBook() { return BibleApi.isKnownBook.apply(null, arguments); }

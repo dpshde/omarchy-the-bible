@@ -1,3 +1,36 @@
+import {
+  CANON_BOOK_COUNT,
+  CANON_CHAPTER_COUNT,
+  MAX_BLOCKS_PER_CHAPTER,
+  MAX_CHAPTER,
+  MAX_CHAPTER_KEYS,
+  MAX_INDEX_BYTES,
+  MAX_JSON_DEPTH_INDEX,
+  MAX_JSON_DEPTH_PUB,
+  MAX_JSON_DEPTH_STATE,
+  MAX_PARTS_PER_BLOCK,
+  MAX_PUB_BYTES,
+  MAX_STATE_BYTES,
+  MAX_STRING_CHARS,
+  MAX_VERSE,
+  MAX_VERSES_PER_CHAPTER,
+  MIN_CHAPTER_KEYS,
+  PUB_KINDS,
+  boundInt,
+  boundString,
+  jsonBoundsOk,
+  type PubKind
+} from "./limits";
+
+export {
+  jsonBoundsOk,
+  MAX_INDEX_BYTES,
+  MAX_PUB_BYTES,
+  MAX_STATE_BYTES,
+  MAX_CHAPTER,
+  MAX_VERSE
+} from "./limits";
+
 export const DEFAULT_BOOK = "JHN";
 export const DEFAULT_CHAPTER = 3;
 export const DEFAULT_VERSE = 16;
@@ -107,33 +140,123 @@ export function chapterKey(book: string, chapter: number): string {
   return `${book}.${chapter}`;
 }
 
+export function isKnownBook(book: string): boolean {
+  return Object.prototype.hasOwnProperty.call(BOOK_ABBREV, book);
+}
+
+export function isChapterKey(key: string): boolean {
+  const split = String(key || "").split(".");
+  if (split.length !== 2) return false;
+  const [book, chapterToken] = split;
+  if (!book || !isKnownBook(book)) return false;
+  const chapter = boundInt(chapterToken, 1, MAX_CHAPTER);
+  return chapter != null;
+}
+
+function clipString(value: unknown): string {
+  const text = boundString(value, MAX_STRING_CHARS);
+  return text == null ? "" : text;
+}
+
 export function normalizeVerse(row: Partial<VerseRow> & { n?: number; t?: string }): VerseRow {
-  const heading = String(row.heading || row.h || "");
-  const subhead = String(row.subhead || row.s || "");
-  const refs = String(row.refs || row.r || "");
+  const heading = clipString(row.heading || row.h || "");
+  const subhead = clipString(row.subhead || row.s || "");
+  const refs = clipString(row.refs || row.r || "");
+  const n = boundInt(row.n, 0, MAX_VERSE) ?? 0;
   return {
-    n: Math.floor(Number(row.n) || 0),
-    t: String(row.t || ""),
+    n,
+    t: clipString(row.t || ""),
     heading,
     subhead,
     refs
   };
 }
 
-export function normalizeIndex(bible: BibleIndex | Record<string, Array<Partial<VerseRow>>> | null | undefined): BibleIndex {
-  const out: BibleIndex = {};
-  if (!bible) return out;
-  for (const [key, rows] of Object.entries(bible)) {
-    if (!Array.isArray(rows)) continue;
-    out[key] = rows.map((row) => normalizeVerse(row));
+function sanitizeVerseRow(row: unknown): VerseRow | null {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const rec = row as Record<string, unknown>;
+  const n = boundInt(rec.n, 1, MAX_VERSE);
+  const t = boundString(rec.t);
+  const heading = boundString(rec.heading ?? rec.h ?? "");
+  const subhead = boundString(rec.subhead ?? rec.s ?? "");
+  const refs = boundString(rec.refs ?? rec.r ?? "");
+  if (n == null || t == null || heading == null || subhead == null || refs == null) return null;
+  return { n, t, heading, subhead, refs };
+}
+
+function sanitizeVerseRows(rows: unknown): VerseRow[] | null {
+  if (!Array.isArray(rows) || rows.length > MAX_VERSES_PER_CHAPTER) return null;
+  const out: VerseRow[] = [];
+  for (const row of rows) {
+    const next = sanitizeVerseRow(row);
+    if (!next) return null;
+    out.push(next);
   }
   return out;
 }
 
+export function normalizeIndex(bible: BibleIndex | Record<string, Array<Partial<VerseRow>>> | null | undefined): BibleIndex {
+  const out: BibleIndex = Object.create(null);
+  if (!bible || typeof bible !== "object" || Array.isArray(bible)) return out;
+  for (const [key, rows] of Object.entries(bible)) {
+    if (!isChapterKey(key)) continue;
+    const next = sanitizeVerseRows(rows);
+    if (!next) continue;
+    out[key] = next;
+  }
+  return out;
+}
+
+function parseObject(raw: string, maxBytes: number, maxDepth: number): Record<string, unknown> | null {
+  const text = String(raw || "");
+  if (!jsonBoundsOk(text, maxBytes, maxDepth)) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export function parseIndex(raw: string): BibleIndex | null {
+  const parsed = parseObject(raw, MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX);
+  if (!parsed) return null;
+  const keys = Object.keys(parsed);
+  if (keys.length < MIN_CHAPTER_KEYS || keys.length > MAX_CHAPTER_KEYS) return null;
+  const out: BibleIndex = Object.create(null);
+  for (const key of keys) {
+    if (!isChapterKey(key)) return null;
+    const rows = sanitizeVerseRows(parsed[key]);
+    if (!rows || rows.length < 1) return null;
+    out[key] = rows;
+  }
+  return out;
+}
+
+export function assertBibleIndex(index: BibleIndex): void {
+  const keys = Object.keys(index);
+  if (keys.length !== CANON_CHAPTER_COUNT) {
+    throw new Error(`bible chapter count ${keys.length}, expected ${CANON_CHAPTER_COUNT}`);
+  }
+  if (keys.length > MAX_CHAPTER_KEYS) {
+    throw new Error(`bible chapter count ${keys.length} exceeds max`);
+  }
+  const books = new Set(keys.map((key) => key.split(".")[0]));
+  if (books.size !== CANON_BOOK_COUNT) {
+    throw new Error(`bible book count ${books.size}, expected ${CANON_BOOK_COUNT}`);
+  }
+  for (const book of Object.keys(BOOK_ABBREV)) {
+    if (!index[`${book}.1`]) throw new Error(`missing ${book}.1`);
+  }
+}
+
 export function versesFor(bible: BibleIndex | null | undefined, book: string, chapter: number): VerseRow[] {
-  if (!bible) return [];
-  const rows = bible[chapterKey(book, chapter)];
-  return Array.isArray(rows) ? rows : [];
+  if (!bible || !isKnownBook(book)) return [];
+  const chapterNum = boundInt(chapter, 1, MAX_CHAPTER);
+  if (chapterNum == null) return [];
+  const rows = sanitizeVerseRows(bible[chapterKey(book, chapterNum)]);
+  return rows || [];
 }
 
 export type ReaderBlock = {
@@ -204,15 +327,95 @@ export function parseRefInput(text: string): string {
     .replace(/[–—]/g, "-");
 }
 
+const PUB_KIND_SET = new Set<string>(PUB_KINDS);
+
+function sanitizePubPart(part: unknown): PubPart | null {
+  if (!part || typeof part !== "object" || Array.isArray(part)) return null;
+  const rec = part as Record<string, unknown>;
+  const n = boundInt(rec.n, 1, MAX_VERSE);
+  const t = boundString(rec.t);
+  if (n == null || t == null) return null;
+  return {
+    n,
+    t,
+    wj: rec.wj === true,
+    showNum: rec.showNum === true
+  };
+}
+
+function sanitizePubBlock(row: unknown): PubBlock | null {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const rec = row as Record<string, unknown>;
+  const kind = boundString(rec.kind, 16);
+  if (kind == null || !PUB_KIND_SET.has(kind)) return null;
+  const text = boundString(rec.text);
+  const indent = boundInt(rec.indent ?? 0, 0, 4);
+  if (text == null || indent == null) return null;
+  if (!Array.isArray(rec.parts) || rec.parts.length > MAX_PARTS_PER_BLOCK) return null;
+  const parts: PubPart[] = [];
+  for (const part of rec.parts) {
+    const next = sanitizePubPart(part);
+    if (!next) return null;
+    parts.push(next);
+  }
+  return {
+    kind: kind as PubKind,
+    spaced: rec.spaced === true,
+    indent,
+    text,
+    parts
+  };
+}
+
+function sanitizePubBlocks(rows: unknown): PubBlock[] | null {
+  if (!Array.isArray(rows) || rows.length > MAX_BLOCKS_PER_CHAPTER) return null;
+  const out: PubBlock[] = [];
+  for (const row of rows) {
+    const next = sanitizePubBlock(row);
+    if (!next) return null;
+    out.push(next);
+  }
+  return out;
+}
+
+export function parsePublication(raw: string): Record<string, PubBlock[]> | null {
+  const parsed = parseObject(raw, MAX_PUB_BYTES, MAX_JSON_DEPTH_PUB);
+  if (!parsed) return null;
+  const keys = Object.keys(parsed);
+  if (keys.length < MIN_CHAPTER_KEYS || keys.length > MAX_CHAPTER_KEYS) return null;
+  const out: Record<string, PubBlock[]> = Object.create(null);
+  for (const key of keys) {
+    if (!isChapterKey(key)) return null;
+    const rows = sanitizePubBlocks(parsed[key]);
+    if (!rows || rows.length < 1) return null;
+    out[key] = rows;
+  }
+  return out;
+}
+
+export function assertPubIndex(pub: Record<string, PubBlock[]>): void {
+  const keys = Object.keys(pub);
+  if (keys.length !== CANON_CHAPTER_COUNT) {
+    throw new Error(`publication chapter count ${keys.length}, expected ${CANON_CHAPTER_COUNT}`);
+  }
+  const books = new Set(keys.map((key) => key.split(".")[0]));
+  if (books.size !== CANON_BOOK_COUNT) {
+    throw new Error(`publication book count ${books.size}, expected ${CANON_BOOK_COUNT}`);
+  }
+}
+
 export function pubBlocks(
   pub: Record<string, PubBlock[]> | null | undefined,
   book: string,
   chapter: number
 ): PubBlock[] {
-  if (!pub) return [];
-  const rows = pub[chapterKey(book, chapter)];
-  if (!Array.isArray(rows)) return [];
-  const out = rows.map((row) => ({ ...row, join: false, joinNext: false, fillVerse: 0 }));
+  if (!pub || !isKnownBook(book)) return [];
+  const chapterNum = boundInt(chapter, 1, MAX_CHAPTER);
+  if (chapterNum == null) return [];
+  const rows = pub[chapterKey(book, chapterNum)];
+  const sanitized = sanitizePubBlocks(rows);
+  if (!sanitized) return [];
+  const out = sanitized.map((row) => ({ ...row, join: false, joinNext: false, fillVerse: 0 }));
   for (let i = 0; i < out.length; i++) {
     if (!isFlow(out[i])) continue;
     const next = nextFlowIndex(out, i + 1);
@@ -393,6 +596,10 @@ export function selectedText(bible: BibleIndex | null | undefined, selection: Se
 
 export type ParsedState = Selection & { publication: boolean };
 
+export function stateMaxBytes(): number {
+  return MAX_STATE_BYTES;
+}
+
 export function serializeState(selection: Selection, extras?: { publication?: boolean }): string {
   return JSON.stringify({
     book: selection.book,
@@ -403,12 +610,22 @@ export function serializeState(selection: Selection, extras?: { publication?: bo
   });
 }
 
-function parseVerseBound(value: unknown, fallback: number): number {
+function fallbackState(fallback: Selection): ParsedState {
+  return {
+    book: isKnownBook(fallback.book) ? fallback.book : DEFAULT_BOOK,
+    chapter: boundInt(fallback.chapter, 1, MAX_CHAPTER) ?? DEFAULT_CHAPTER,
+    startVerse: boundInt(fallback.startVerse, 0, MAX_VERSE) ?? DEFAULT_VERSE,
+    endVerse: boundInt(fallback.endVerse, 0, MAX_VERSE) ?? DEFAULT_VERSE,
+    publication: false
+  };
+}
+
+function parseVerseBound(value: unknown, fallback: number): number | null {
   if (value === 0 || value === "0") return 0;
-  if (value === undefined || value === null || value === "") return fallback;
-  const n = Math.floor(Number(value));
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(0, n);
+  if (value === undefined || value === null || value === "") {
+    return boundInt(fallback, 0, MAX_VERSE);
+  }
+  return boundInt(value, 0, MAX_VERSE);
 }
 
 export function parseState(raw: string, fallback: Selection = {
@@ -417,19 +634,31 @@ export function parseState(raw: string, fallback: Selection = {
   startVerse: DEFAULT_VERSE,
   endVerse: DEFAULT_VERSE
 }): ParsedState {
-  const publicationFallback = false;
+  const safe = fallbackState(fallback);
+  const text = String(raw || "{}");
+  if (!jsonBoundsOk(text, MAX_STATE_BYTES, MAX_JSON_DEPTH_STATE)) return safe;
   try {
-    const parsed = JSON.parse(String(raw || "{}")) as Record<string, unknown>;
-    const book = typeof parsed.book === "string" && parsed.book ? parsed.book : fallback.book;
-    const chapter = Math.max(1, Math.floor(Number(parsed.chapter) || fallback.chapter));
-    const startVerse = parseVerseBound(parsed.startVerse, fallback.startVerse);
-    const endVerse = parseVerseBound(parsed.endVerse, startVerse === 0 ? 0 : fallback.endVerse);
-    const publication = parsed.publication === true;
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return safe;
+    const rec = parsed as Record<string, unknown>;
+    if (typeof rec.book !== "string" || !isKnownBook(rec.book)) return safe;
+    const chapter = boundInt(rec.chapter, 1, MAX_CHAPTER);
+    if (chapter == null) return safe;
+    const startVerse = parseVerseBound(rec.startVerse, safe.startVerse);
+    const endVerse = parseVerseBound(rec.endVerse, startVerse === 0 ? 0 : safe.endVerse);
+    if (startVerse == null || endVerse == null) return safe;
+    const publication = rec.publication === true;
     if (startVerse < 1 || endVerse < 1) {
-      return { book, chapter, startVerse: 0, endVerse: 0, publication };
+      return { book: rec.book, chapter, startVerse: 0, endVerse: 0, publication };
     }
-    return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse), publication };
+    return {
+      book: rec.book,
+      chapter,
+      startVerse,
+      endVerse: Math.max(startVerse, endVerse),
+      publication
+    };
   } catch {
-    return { ...fallback, publication: publicationFallback };
+    return safe;
   }
 }

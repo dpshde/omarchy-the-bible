@@ -16,6 +16,8 @@ await bundlePragmaLibrary({
     "chapterKey",
     "normalizeIndex",
     "normalizeVerse",
+    "parseIndex",
+    "parsePublication",
     "versesFor",
     "readerBlocks",
     "pubBlocks",
@@ -37,6 +39,8 @@ await bundlePragmaLibrary({
     "booksForTestament",
     "selectedText",
     "serializeState",
-    "parseState"
+    "parseState",
+    "stateMaxBytes",
+    "isKnownBook"
   ]
 });

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   formatCompact,
+  isKnownBook,
+  jsonBoundsOk,
   nextChapter,
   normalizeIndex,
+  parseIndex,
+  parsePublication,
   parseRefInput,
   parseState,
   prevChapter,
@@ -13,6 +17,7 @@ import {
   splitRefs,
   toCanonical
 } from "../src/bible";
+import { MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX, MAX_STATE_BYTES } from "../src/limits";
 
 const bible = {
   "JHN.3": [
@@ -86,6 +91,22 @@ describe("state", () => {
       JSON.stringify({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 })
     );
     expect(parsed).toEqual({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0, publication: false });
+  });
+
+  it("rejects unknown books and out-of-range numbers", () => {
+    const fallback = {
+      book: "JHN",
+      chapter: 3,
+      startVerse: 16,
+      endVerse: 16,
+      publication: false
+    };
+    expect(parseState(JSON.stringify({ book: "NOPE", chapter: 1, startVerse: 1, endVerse: 1 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 999, startVerse: 1, endVerse: 1 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 9999, endVerse: 1 }))).toEqual(fallback);
+    expect(parseState("x".repeat(MAX_STATE_BYTES + 1))).toEqual(fallback);
+    expect(isKnownBook("JHN")).toBe(true);
+    expect(isKnownBook("nope")).toBe(false);
   });
 });
 
@@ -196,5 +217,24 @@ describe("pubBlocks", () => {
     expect(rows[1].joinNext).toBe(true);
     expect(rows[1].fillVerse).toBe(4);
     expect(rows[2].join).toBe(true);
+  });
+
+  it("drops unbounded or unknown publication rows", () => {
+    expect(pubBlocks({ "PSA.23": [{ kind: "script", spaced: false, indent: 0, text: "<b>x</b>", parts: [] }] }, "PSA", 23)).toEqual([]);
+    expect(pubBlocks({ "NOPE.1": [{ kind: "para", spaced: false, indent: 0, text: "x", parts: [{ n: 1, t: "x", wj: false, showNum: true }] }] }, "NOPE", 1)).toEqual([]);
+  });
+});
+
+describe("parseIndex", () => {
+  it("rejects oversized, deep, or unknown-key JSON", () => {
+    expect(jsonBoundsOk("[]", 10, 1)).toBe(true);
+    expect(jsonBoundsOk("{".repeat(MAX_JSON_DEPTH_INDEX + 1) + "}".repeat(MAX_JSON_DEPTH_INDEX + 1), 100, MAX_JSON_DEPTH_INDEX)).toBe(false);
+    expect(parseIndex("x".repeat(MAX_INDEX_BYTES + 1))).toBeNull();
+    expect(parseIndex(JSON.stringify({ "NOPE.1": [{ n: 1, t: "x" }] }))).toBeNull();
+    expect(parseIndex('{"__proto__":[{"n":1,"t":"x"}]}')).toBeNull();
+  });
+
+  it("rejects publication JSON that is not a full bounded index", () => {
+    expect(parsePublication(JSON.stringify({ "JHN.1": [{ kind: "para", spaced: false, indent: 0, text: "x", parts: [] }] }))).toBeNull();
   });
 });

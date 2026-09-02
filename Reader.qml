@@ -55,6 +55,20 @@ Item {
   property bool writingState: false
   property bool spaceHeld: false
   property bool suppressSearchSync: false
+  property string pendingStateText: ""
+  property string stateOp: ""
+
+  readonly property string statePath: {
+    var home = String(Quickshell.env("HOME") || "")
+    if (!home || home.charAt(0) !== "/") return ""
+    var parts = home.split("/")
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === "..") return ""
+    }
+    return home + "/.local/state/omarchy/settings/route-bible.json"
+  }
+  readonly property string stateHelper: root.fileUrlToPath(Qt.resolvedUrl("safe-state.py"))
+  readonly property int stateLimit: Bible.stateMaxBytes()
 
   readonly property var bookCodeList: GrabBcv.bookCodes()
   readonly property int verseTotal: Bible.lastVerseNumber(root.bible, root.book, root.chapter)
@@ -142,8 +156,53 @@ Item {
 
   function persist() {
     if (!root.stateReady) return
-    root.writingState = true
-    stateFile.setText(Bible.serializeState(root.selection, { publication: root.publication }))
+    if (!root.statePath || !root.stateHelper) return
+    root.pendingStateText = Bible.serializeState(root.selection, { publication: root.publication })
+    root.startStateOp("write")
+  }
+
+  function applyDefaultState() {
+    root.writingState = false
+    root.publication = false
+    root.applyPlace(Bible.defaultBook(), Bible.defaultChapter(), Bible.defaultVerse(), Bible.defaultVerse(), false)
+    root.stateReady = true
+  }
+
+  function applyStateText(raw) {
+    var place = Bible.parseState(raw)
+    if (!place || !Bible.isKnownBook(place.book) || GrabBcv.chapterCount(place.book) < 1) {
+      root.applyDefaultState()
+      return
+    }
+    if (place.publication) {
+      root.publication = true
+      root.pubRequested = true
+    }
+    if (root.stateReady
+        && place.book === root.book
+        && place.chapter === root.chapter
+        && place.startVerse === root.startVerse
+        && place.endVerse === root.endVerse) {
+      root.stateReady = true
+      return
+    }
+    root.applyPlace(place.book, place.chapter, place.startVerse, place.endVerse, false)
+    root.stateReady = true
+  }
+
+  function startStateOp(op) {
+    if (!root.statePath || !root.stateHelper) {
+      root.applyDefaultState()
+      return
+    }
+    if (op === "write") root.writingState = true
+    root.stateOp = op
+    var proc = op === "write" ? stateWriter : (op === "check" ? stateChecker : stateReader)
+    proc.running = false
+    if (op === "write")
+      proc.environment = ({ ROUTE_BIBLE_STATE: root.pendingStateText })
+    proc.command = ["python3", root.stateHelper, op, root.statePath, String(root.stateLimit)]
+    proc.running = true
   }
 
   function togglePublication() {
@@ -155,7 +214,7 @@ Item {
 
 
   function applyPlace(book, chapter, startVerse, endVerse, persistNow) {
-    if (!book || GrabBcv.chapterCount(book) < 1) return false
+    if (!book || !Bible.isKnownBook(book) || GrabBcv.chapterCount(book) < 1) return false
     var nextChapter = Math.max(1, Math.min(GrabBcv.chapterCount(book), Math.floor(chapter || 1)))
     var startNum = Math.floor(Number(startVerse))
     var endNum = Math.floor(Number(endVerse))
@@ -822,8 +881,12 @@ Item {
     printErrors: false
     watchChanges: true
     onLoaded: {
-      try { root.bible = Bible.normalizeIndex(JSON.parse(text())) } catch (e) { root.bible = null }
-      stateFile.reload()
+      root.bible = Bible.parseIndex(text())
+      Qt.callLater(function() { root.startStateOp("check") })
+    }
+    onLoadFailed: {
+      root.bible = null
+      Qt.callLater(function() { root.startStateOp("check") })
     }
     onFileChanged: reload()
   }
@@ -834,47 +897,69 @@ Item {
     printErrors: false
     watchChanges: true
     onLoaded: {
-      try { root.pub = JSON.parse(text()) } catch (e) { root.pub = null }
+      root.pub = Bible.parsePublication(text())
     }
     onFileChanged: reload()
   }
 
   FileView {
-    id: stateFile
-    path: Quickshell.env("HOME") + "/.local/state/omarchy/settings/route-bible.json"
+    id: stateWatch
+    path: root.statePath
+    preload: false
     watchChanges: true
-    atomicWrites: true
     printErrors: false
-    onLoaded: {
-      if (root.writingState) {
-        root.writingState = false
-        root.stateReady = true
-        return
-      }
-      var place = Bible.parseState(text())
-      if (place.publication) {
-        root.publication = true
-        root.pubRequested = true
-      }
-      if (root.stateReady
-          && place.book === root.book
-          && place.chapter === root.chapter
-          && place.startVerse === root.startVerse
-          && place.endVerse === root.endVerse) {
-        root.stateReady = true
-        return
-      }
-      root.applyPlace(place.book, place.chapter, place.startVerse, place.endVerse, false)
-      root.stateReady = true
-    }
-    onLoadFailed: {
-      root.writingState = false
-      root.applyPlace(Bible.defaultBook(), Bible.defaultChapter(), Bible.defaultVerse(), Bible.defaultVerse(), false)
-      root.stateReady = true
-    }
     onFileChanged: {
       if (root.writingState) return
-      reload()
+      root.startStateOp("check")
+    }
+  }
+
+  Process {
+    id: stateChecker
+    stdinEnabled: false
+    stdout: StdioCollector {
+      id: stateCheckOut
+    }
+    onExited: function(exitCode) {
+      if (root.stateOp !== "check") return
+      root.stateOp = ""
+      var status = String(stateCheckOut.text || "").trim()
+      if (exitCode === 0 && status === "missing") {
+        root.applyDefaultState()
+        return
+      }
+      if (exitCode === 0 && status === "ok") {
+        root.startStateOp("read")
+        return
+      }
+      root.applyDefaultState()
+    }
+  }
+
+  Process {
+    id: stateReader
+    stdinEnabled: false
+    stdout: StdioCollector {
+      id: stateReadOut
+    }
+    onExited: function(exitCode) {
+      if (root.stateOp !== "read") return
+      root.stateOp = ""
+      if (exitCode !== 0) {
+        root.applyDefaultState()
+        return
+      }
+      root.applyStateText(String(stateReadOut.text || ""))
+    }
+  }
+
+  Process {
+    id: stateWriter
+    stdinEnabled: false
+    stdout: StdioCollector {}
+    onExited: function(exitCode) {
+      root.writingState = false
+      if (exitCode === 0) root.stateReady = true
     }
   }
 
@@ -1000,6 +1085,7 @@ Item {
       height: visible ? implicitHeight : 0
       visible: root.searchError !== ""
       text: root.searchError
+      textFormat: Text.PlainText
       color: root.urgent
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -1015,6 +1101,7 @@ Item {
       height: visible ? implicitHeight : 0
       visible: root.searchActive && root.searchHint !== "" && root.searchError === ""
       text: root.searchHint
+      textFormat: Text.PlainText
       color: root.muted
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -1182,6 +1269,7 @@ Item {
             anchors.topMargin: blockDelegate.topPad
             visible: !blockDelegate.isFlow && blockDelegate.kind !== "blank" && blockDelegate.kind !== "refs"
             text: blockDelegate.blockLabel
+            textFormat: Text.PlainText
             color: blockDelegate.isVerse
               ? (blockDelegate.selected ? root.selectedTextColor : (blockDelegate.hovered ? root.accent : root.foreground))
               : (blockDelegate.kind === "refs" || blockDelegate.kind === "d" ? root.muted : root.foreground)
@@ -1241,6 +1329,7 @@ Item {
 
                   Text {
                     text: refChip.refText
+                    textFormat: Text.PlainText
                     color: refHover.containsMouse ? root.accent : root.muted
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -1299,6 +1388,7 @@ Item {
                   id: bodyMetrics
                   visible: false
                   text: String(run.modelData.t || "")
+                  textFormat: Text.PlainText
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
                   font.italic: blockDelegate.kind === "d"
@@ -1309,6 +1399,7 @@ Item {
                   id: numLabel
                   visible: run.showNum
                   text: String(run.n)
+                  textFormat: Text.PlainText
                   color: blockDelegate.selected ? root.selectedTextColor : root.muted
                   opacity: blockDelegate.selected ? 1 : 0.4
                   font.family: root.fontFamily
@@ -1325,6 +1416,7 @@ Item {
                   width: run.bodyW
                   wrapMode: Text.WordWrap
                   text: String(run.modelData.t || "")
+                  textFormat: Text.PlainText
                   color: blockDelegate.selected
                     ? root.selectedTextColor
                     : (blockDelegate.hovered || run.modelData.wj ? root.accent : root.foreground)
@@ -1495,6 +1587,7 @@ Item {
               anchors.left: parent.left
               anchors.leftMargin: Style.space(8)
               text: GrabBcv.bookName(modelData)
+              textFormat: Text.PlainText
               color: parent.hovered || parent.selected ? root.accent : root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
@@ -1543,6 +1636,7 @@ Item {
             Text {
               anchors.centerIn: parent
               text: parent.chapterNumber
+              textFormat: Text.PlainText
               color: parent.hovered || parent.selected ? root.accent : root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
@@ -1605,6 +1699,7 @@ Item {
           Text {
             width: parent.width
             text: root.displayLabel
+            textFormat: Text.PlainText
             color: titleHover.containsMouse || root.mode === "chapters" ? root.accent : root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.subtitle
