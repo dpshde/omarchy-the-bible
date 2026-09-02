@@ -889,114 +889,122 @@ Item {
     id: layout
     anchors.fill: parent
 
-    Item {
+    Column {
       id: header
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
-      height: Math.max(Style.space(28), searchField.implicitHeight, headerRight.implicitHeight)
+      spacing: Style.space(6)
 
-      Row {
-        id: headerRight
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(6)
+      Item {
+        width: parent.width
+        height: Math.max(Style.space(28), searchField.implicitHeight, headerRight.implicitHeight)
 
-        Button {
-          id: pubBtn
-          visible: root.expanded
-          text: "USFM"
-          selected: root.publication
-          bordered: true
-          foreground: root.foreground
-          accent: root.accent
-          fontFamily: root.fontFamily
-          tooltipText: root.publication ? "Show verse list" : "Show publication layout"
-          onClicked: root.togglePublication()
-        }
+        Row {
+          id: headerRight
+          z: 2
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(6)
 
-        IconButton {
-          id: popoutBtn
-          visible: root.expanded && !root.fullscreen
-          iconSource: Qt.resolvedUrl("icons/window.svg")
-          foreground: root.foreground
-          tooltipText: root.windowed ? "Dock overlay" : "Pop out window"
-          onClicked: {
-            if (root.windowed) root.requestCollapse()
-            else root.requestPopout()
+          IconButton {
+            id: popoutBtn
+            visible: root.expanded && !root.fullscreen
+            iconSource: Qt.resolvedUrl("icons/window.svg")
+            foreground: root.foreground
+            tooltipText: root.windowed ? "Dock overlay" : "Pop out window"
+            onClicked: {
+              if (root.windowed) root.requestCollapse()
+              else root.requestPopout()
+            }
+          }
+
+          IconButton {
+            id: chromeBtn
+            visible: !root.expanded
+            iconSource: Qt.resolvedUrl("icons/expand.svg")
+            foreground: root.foreground
+            tooltipText: "Expand overlay"
+            onClicked: root.requestExpand()
+          }
+
+          IconButton {
+            id: copyBtn
+            iconSource: Qt.resolvedUrl("icons/copy.svg")
+            foreground: root.foreground
+            tooltipText: "Copy text and URL"
+            onClicked: root.copyText()
+          }
+
+          Button {
+            text: "Open  ↵"
+            foreground: root.foreground
+            accent: root.accent
+            fontFamily: root.fontFamily
+            selected: true
+            tooltipText: "Open the current selection on route.bible"
+            onClicked: root.routeNow()
           }
         }
 
-        IconButton {
-          id: chromeBtn
-          visible: !root.expanded
-          iconSource: Qt.resolvedUrl("icons/expand.svg")
-          foreground: root.foreground
-          tooltipText: "Expand overlay"
-          onClicked: root.requestExpand()
-        }
-
-        IconButton {
-          id: copyBtn
-          iconSource: Qt.resolvedUrl("icons/copy.svg")
-          foreground: root.foreground
-          tooltipText: "Copy text and URL"
-          onClicked: root.copyText()
-        }
-
-        Button {
-          text: "Open  ↵"
+        TextField {
+          id: searchField
+          z: 1
+          anchors.left: parent.left
+          anchors.right: headerRight.left
+          anchors.rightMargin: Style.space(6)
+          anchors.verticalCenter: parent.verticalCenter
+          placeholderText: "jn 3:16–18"
           foreground: root.foreground
           accent: root.accent
-          fontFamily: root.fontFamily
-          selected: true
-          tooltipText: "Open the current selection on route.bible"
-          onClicked: root.routeNow()
+          placeholderTextColor: root.muted
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          text: root.searchText
+          onTextChanged: {
+            root.searchText = text
+            root.searchError = ""
+            root.refreshSuggestions()
+          }
+          Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+              if (!root.handleEscape()) {
+                searchField.focus = false
+                root.requestVerseFocus()
+              }
+              event.accepted = true
+            } else if (event.key === Qt.Key_Down) {
+              root.handleSearchArrow(1)
+              event.accepted = true
+            } else if (event.key === Qt.Key_Tab) {
+              if (!root.acceptTopSuggestion()) root.enterVersesFromSearch()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Up) {
+              root.handleSearchArrow(-1)
+              event.accepted = true
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+              if (event.modifiers & Qt.ControlModifier) root.routeNow()
+              else if (event.modifiers & Qt.ShiftModifier) root.outlineNow()
+              else if (root.searchOpensRoute()) root.routeNow()
+              else if (!root.acceptTopSuggestion()) root.submitSearch()
+              event.accepted = true
+            }
+          }
         }
       }
 
-      TextField {
-        id: searchField
-        anchors.left: parent.left
-        anchors.right: headerRight.left
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        placeholderText: "jn 3:16–18"
+      Button {
+        id: pubBtn
+        visible: root.expanded
+        height: root.expanded ? implicitHeight : 0
+        text: root.publication ? "USFM on" : "USFM"
+        selected: root.publication
+        bordered: true
         foreground: root.foreground
         accent: root.accent
-        placeholderTextColor: root.muted
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        text: root.searchText
-        onTextChanged: {
-          root.searchText = text
-          root.searchError = ""
-          root.refreshSuggestions()
-        }
-        Keys.onPressed: function(event) {
-          if (event.key === Qt.Key_Escape) {
-            if (!root.handleEscape()) {
-              searchField.focus = false
-              root.requestVerseFocus()
-            }
-            event.accepted = true
-          } else if (event.key === Qt.Key_Down) {
-            root.handleSearchArrow(1)
-            event.accepted = true
-          } else if (event.key === Qt.Key_Tab) {
-            if (!root.acceptTopSuggestion()) root.enterVersesFromSearch()
-            event.accepted = true
-          } else if (event.key === Qt.Key_Up) {
-            root.handleSearchArrow(-1)
-            event.accepted = true
-          } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (event.modifiers & Qt.ControlModifier) root.routeNow()
-            else if (event.modifiers & Qt.ShiftModifier) root.outlineNow()
-            else if (root.searchOpensRoute()) root.routeNow()
-            else if (!root.acceptTopSuggestion()) root.submitSearch()
-            event.accepted = true
-          }
-        }
+        fontFamily: root.fontFamily
+        tooltipText: root.publication ? "Show verse list" : "Show publication layout"
+        onClicked: root.togglePublication()
       }
     }
 
