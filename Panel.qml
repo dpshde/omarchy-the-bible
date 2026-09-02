@@ -5,15 +5,17 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "dpshade.route-bible"
+  moduleName: "io.github.dpshde.the-bible"
   manageIpc: false
 
   property var anchorItem: null
   property var hostWidget: null
   readonly property var barIdentity: hostWidget || root
-  readonly property color contentForeground: bar ? bar.foreground : Color.foreground
+  readonly property color contentForeground: Color.popups.text
   readonly property color mutedForeground: Color.muted
-  readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
+  readonly property color contentAccent: Color.accent
+  readonly property color contentUrgent: Color.urgent
+  readonly property string contentFontFamily: Style.font.family
   readonly property string compactLabel: reader.compactLabel
   readonly property string displayLabel: reader.displayLabel
   readonly property string routeLink: reader.routeLink
@@ -61,7 +63,7 @@ Panel {
     reader.persist()
     root.close()
     Qt.callLater(function() {
-      Util.execArgv(["omarchy-shell", "shell", "summon", "dpshade.route-bible", "{}"])
+      Util.execArgv(["omarchy-shell", "shell", "summon", "io.github.dpshde.the-bible", "{}"])
     })
   }
 
@@ -83,21 +85,18 @@ Panel {
       Keys.onPressed: function(event) {
         var shift = event.modifiers & Qt.ShiftModifier
         var ctrl = event.modifiers & Qt.ControlModifier
+        var alt = event.modifiers & Qt.AltModifier
+        var meta = event.modifiers & Qt.MetaModifier
 
         if (reader.searchActive) {
           if (event.key === Qt.Key_Backtab) {
             root.switchPanel(-1)
             event.accepted = true
           } else if (event.key === Qt.Key_Down) {
-            reader.enterVersesFromSearch()
+            reader.handleSearchArrow(1)
             event.accepted = true
           } else if (event.key === Qt.Key_Up) {
-            event.accepted = true
-          } else if (event.key === Qt.Key_Left) {
-            reader.stepChapter(-1)
-            event.accepted = true
-          } else if (event.key === Qt.Key_Right) {
-            reader.stepChapter(1)
+            reader.handleSearchArrow(-1)
             event.accepted = true
           }
           return
@@ -129,27 +128,28 @@ Panel {
           return
         }
         if (event.key === Qt.Key_Home) {
-          reader.selectVerse(1)
+          reader.handleHome()
           event.accepted = true
           return
         }
         if (event.key === Qt.Key_End) {
-          reader.selectVerse(reader.verseTotal)
+          reader.handleEnd()
           event.accepted = true
           return
         }
         if (event.key === Qt.Key_PageUp) {
-          reader.moveFocus(-8, shift)
+          reader.handlePage(-8, shift)
           event.accepted = true
           return
         }
         if (event.key === Qt.Key_PageDown) {
-          reader.moveFocus(8, shift)
+          reader.handlePage(8, shift)
           event.accepted = true
           return
         }
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-          if (shift) reader.outlineNow()
+          if (reader.mode === "books" || reader.mode === "chapters") reader.activateHovered()
+          else if (shift) reader.outlineNow()
           else reader.routeNow()
           event.accepted = true
           return
@@ -164,36 +164,43 @@ Panel {
           event.accepted = true
           return
         }
-        if (event.key === Qt.Key_Left || event.text === "h") {
+        if (event.key === Qt.Key_Space) {
+          if (reader.mode === "books" || reader.mode === "chapters") {
+            if (!event.isAutoRepeat) reader.activateHovered()
+            event.accepted = true
+            return
+          }
+          if (!event.isAutoRepeat) reader.beginSpaceHold()
+          event.accepted = true
+          return
+        }
+        if (event.key === Qt.Key_Left || (event.text === "h" && event.key !== Qt.Key_Space)) {
           reader.handleMove(-1, 0, false)
           event.accepted = true
           return
         }
-        if (event.key === Qt.Key_Right || event.text === "l") {
+        if (event.key === Qt.Key_Right || (event.text === "l" && event.key !== Qt.Key_Space)) {
           reader.handleMove(1, 0, false)
           event.accepted = true
           return
         }
-        if (event.key === Qt.Key_Up || event.text === "k") {
-          reader.handleMove(0, -1, shift)
+        if (event.key === Qt.Key_Up || (event.text === "k" && event.key !== Qt.Key_Space)) {
+          reader.handleMove(0, -1, false)
           event.accepted = true
           return
         }
-        if (event.key === Qt.Key_Down || event.text === "j") {
-          reader.handleMove(0, 1, shift)
+        if (event.key === Qt.Key_Down || (event.text === "j" && event.key !== Qt.Key_Space)) {
+          reader.handleMove(0, 1, false)
           event.accepted = true
           return
         }
-        if (event.key === Qt.Key_Space) {
-          if (shift) reader.handleMove(0, -1, true)
-          else reader.selectVerse(reader.focusVerse)
-          event.accepted = true
-          return
-        }
-        if (event.text && event.text.length === 1) {
+        if (!ctrl && !alt && !meta && event.text && event.text.length === 1) {
           reader.handleTextKey(event.text)
           event.accepted = true
         }
+      }
+      Keys.onReleased: function(event) {
+        if (event.key === Qt.Key_Space) reader.endSpaceHold()
       }
 
       Reader {
@@ -201,7 +208,9 @@ Panel {
         anchors.fill: parent
         foreground: root.contentForeground
         muted: root.mutedForeground
-        accent: Color.accent
+        accent: root.contentAccent
+        urgent: root.contentUrgent
+        surfaceColor: Color.popups.background
         fontFamily: root.contentFontFamily
         host: root
         expanded: false

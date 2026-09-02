@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/selah-tools/labs/route-bible-omarchy/src/bible.ts. Do not edit by hand.
+// Generated from /home/dpshde/Developer/omarchy-route-bible/src/bible.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};
@@ -64,6 +64,7 @@ var BibleApi = (function() {
     defaultVerse: () => defaultVerse,
     formatCompact: () => formatCompact,
     formatDisplay: () => formatDisplay,
+    hasVerseSelection: () => hasVerseSelection,
     isWholeChapter: () => isWholeChapter,
     lastVerseNumber: () => lastVerseNumber,
     nextBook: () => nextBook,
@@ -185,15 +186,23 @@ var BibleApi = (function() {
     const right = Math.floor(Number(b) || left);
     return left <= right ? { start: left, end: right } : { start: right, end: left };
   }
+  function hasVerseSelection(startVerse, endVerse) {
+    return Math.floor(Number(startVerse)) >= 1 && Math.floor(Number(endVerse)) >= 1;
+  }
   function isWholeChapter(startVerse, endVerse, verseCount) {
     return startVerse <= 1 && endVerse >= verseCount && verseCount > 0;
   }
+  function isChapterLevel(selection, verseCount) {
+    if (!hasVerseSelection(selection.startVerse, selection.endVerse)) return true;
+    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
+    return isWholeChapter(start, end, verseCount);
+  }
   function toCanonical(selection, verseCount) {
     const { book, chapter } = selection;
-    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-    if (isWholeChapter(start, end, verseCount)) {
+    if (isChapterLevel(selection, verseCount)) {
       return `${book}.${chapter}`;
     }
+    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
     if (start === end) {
       return `${book}.${chapter}.${start}`;
     }
@@ -201,20 +210,20 @@ var BibleApi = (function() {
   }
   function formatCompact(selection, verseCount) {
     const abbrev = BOOK_ABBREV[selection.book] || selection.book;
-    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-    if (isWholeChapter(start, end, verseCount)) {
+    if (isChapterLevel(selection, verseCount)) {
       return `${abbrev} ${selection.chapter}`;
     }
+    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
     if (start === end) {
       return `${abbrev} ${selection.chapter}:${start}`;
     }
     return `${abbrev} ${selection.chapter}:${start}\u2013${end}`;
   }
   function formatDisplay(selection, bookName, verseCount) {
-    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-    if (isWholeChapter(start, end, verseCount)) {
+    if (isChapterLevel(selection, verseCount)) {
       return `${bookName} ${selection.chapter}`;
     }
+    const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
     if (start === end) {
       return `${bookName} ${selection.chapter}:${start}`;
     }
@@ -268,6 +277,7 @@ var BibleApi = (function() {
     return testament === "nt" ? bookCodes.slice(OT_BOOK_COUNT) : bookCodes.slice(0, OT_BOOK_COUNT);
   }
   function selectedText(bible, selection) {
+    if (!hasVerseSelection(selection.startVerse, selection.endVerse)) return "";
     const rows = versesFor(bible, selection.book, selection.chapter);
     const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
     return rows.filter((row) => row.n >= start && row.n <= end).map((row) => `${row.n} ${row.t}`).join("\n");
@@ -280,6 +290,13 @@ var BibleApi = (function() {
       endVerse: selection.endVerse
     });
   }
+  function parseVerseBound(value, fallback) {
+    if (value === 0 || value === "0") return 0;
+    if (value === void 0 || value === null || value === "") return fallback;
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, n);
+  }
   function parseState(raw, fallback = {
     book: DEFAULT_BOOK,
     chapter: DEFAULT_CHAPTER,
@@ -290,9 +307,12 @@ var BibleApi = (function() {
       const parsed = JSON.parse(String(raw || "{}"));
       const book = typeof parsed.book === "string" && parsed.book ? parsed.book : fallback.book;
       const chapter = Math.max(1, Math.floor(Number(parsed.chapter) || fallback.chapter));
-      const startVerse = Math.max(1, Math.floor(Number(parsed.startVerse) || fallback.startVerse));
-      const endVerse = Math.max(startVerse, Math.floor(Number(parsed.endVerse) || startVerse));
-      return { book, chapter, startVerse, endVerse };
+      const startVerse = parseVerseBound(parsed.startVerse, fallback.startVerse);
+      const endVerse = parseVerseBound(parsed.endVerse, startVerse === 0 ? 0 : fallback.endVerse);
+      if (startVerse < 1 || endVerse < 1) {
+        return { book, chapter, startVerse: 0, endVerse: 0 };
+      }
+      return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse) };
     } catch (e) {
       return __spreadValues({}, fallback);
     }
@@ -308,6 +328,7 @@ function versesFor() { return BibleApi.versesFor.apply(null, arguments); }
 function lastVerseNumber() { return BibleApi.lastVerseNumber.apply(null, arguments); }
 function clampVerse() { return BibleApi.clampVerse.apply(null, arguments); }
 function orderedRange() { return BibleApi.orderedRange.apply(null, arguments); }
+function hasVerseSelection() { return BibleApi.hasVerseSelection.apply(null, arguments); }
 function isWholeChapter() { return BibleApi.isWholeChapter.apply(null, arguments); }
 function toCanonical() { return BibleApi.toCanonical.apply(null, arguments); }
 function formatCompact() { return BibleApi.formatCompact.apply(null, arguments); }

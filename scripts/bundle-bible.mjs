@@ -18,6 +18,7 @@ await bundlePragmaLibrary({
     "lastVerseNumber",
     "clampVerse",
     "orderedRange",
+    "hasVerseSelection",
     "isWholeChapter",
     "toCanonical",
     "formatCompact",

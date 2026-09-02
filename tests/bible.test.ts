@@ -31,6 +31,12 @@ describe("toCanonical", () => {
       toCanonical({ book: "JHN", chapter: 3, startVerse: 1, endVerse: 36 }, 36)
     ).toBe("JHN.3");
   });
+
+  it("emits a chapter when no verses are selected", () => {
+    expect(
+      toCanonical({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 }, 36)
+    ).toBe("JHN.3");
+  });
 });
 
 describe("formatCompact", () => {
@@ -55,6 +61,13 @@ describe("state", () => {
     );
     expect(parsed).toEqual({ book: "ROM", chapter: 8, startVerse: 28, endVerse: 30 });
   });
+
+  it("round-trips an empty verse selection", () => {
+    const parsed = parseState(
+      JSON.stringify({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 })
+    );
+    expect(parsed).toEqual({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 });
+  });
 });
 
 describe("selectedText", () => {
@@ -67,5 +80,11 @@ describe("selectedText", () => {
     });
     expect(text).toContain("16 For God so loved");
     expect(text).toContain("17 For God did not send");
+  });
+
+  it("returns empty text when no verses are selected", () => {
+    expect(
+      selectedText(bible, { book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 })
+    ).toBe("");
   });
 });

@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "id": "dpshade.route-bible",
-  "name": "route.bible",
+  "id": "io.github.dpshde.the-bible",
+  "name": "The Bible",
   "version": "1.0.0",
   "author": "Dylan Shade",
   "license": "MIT",
-  "description": "Parse a passage, select verses, and open route.bible from the Omarchy bar.",
+  "description": "Read the Berean Standard Bible from the Omarchy bar, select verses, and open them on route.bible.",
   "kinds": ["bar-widget", "overlay"],
   "entryPoints": {
     "barWidget": "BarWidget.qml",
     "overlay": "Overlay.qml"
   },
   "barWidget": {
-    "displayName": "route.bible",
-    "description": "Current passage; click to select verses, middle-click to open route.bible.",
+    "displayName": "The Bible",
+    "description": "Click to read and select verses, middle-click to open route.bible.",
     "category": "Info",
     "allowMultiple": false,
     "defaultSection": "right"

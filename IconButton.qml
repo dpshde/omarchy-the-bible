@@ -16,7 +16,32 @@ Button {
   verticalPadding: 0
   bordered: true
   text: ""
-  iconText: ""
+  transformOrigin: Item.Center
+
+  function pulse() {
+    pulseAnim.restart()
+  }
+
+  onClicked: root.pulse()
+
+  SequentialAnimation {
+    id: pulseAnim
+    NumberAnimation {
+      target: root
+      property: "scale"
+      to: 0.82
+      duration: 70
+      easing.type: Easing.OutCubic
+    }
+    NumberAnimation {
+      target: root
+      property: "scale"
+      to: 1
+      duration: 180
+      easing.type: Easing.OutBack
+      easing.overshoot: 2.4
+    }
+  }
 
   Image {
     id: glyph

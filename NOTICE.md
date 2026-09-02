@@ -12,8 +12,8 @@ https://arweave.net/B6yeNb3lk_VkiIp-fTWVh13TlM94LjLK6kC63BPXa8s
 
 ## route.bible
 
-User-visible product name is route.bible. This plugin opens canonical
-route.bible URLs; it is not a replacement for the website.
+The plugin is named The Bible. Opening a selection uses canonical
+route.bible URLs; this plugin is not a replacement for the website.
 
 ## margin.bible
 

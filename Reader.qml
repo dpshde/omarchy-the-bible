@@ -15,9 +15,16 @@ Item {
   property color foreground: Color.foreground
   property color muted: Color.muted
   property color accent: Color.accent
+  property color urgent: Color.urgent
+  property color selectionFill: Style.selectionFillFor(foreground, accent)
+  property color hoverFill: Style.controlFill(false, true, foreground, accent)
+  property color surfaceColor: Color.background
   property string fontFamily: Style.font.family
+  readonly property color selectedTextColor: root.contrastTextOn(root.selectionFill, root.surfaceColor)
   property var host: null
   property bool expanded: false
+  property bool windowed: false
+  property bool fullscreen: false
 
   property string book: Bible.defaultBook()
   property int chapter: Bible.defaultChapter()
@@ -36,6 +43,14 @@ Item {
   property bool stateReady: false
   property bool dragging: false
   property bool extending: false
+  property string focusBook: Bible.defaultBook()
+  property int focusChapter: Bible.defaultChapter()
+  property double lastNavAt: 0
+  property bool ignoreNav: false
+  property bool hoverLocked: false
+  property bool writingState: false
+  property bool spaceHeld: false
+  property bool suppressSearchSync: false
 
   readonly property var bookCodeList: GrabBcv.bookCodes()
   readonly property int verseTotal: Bible.lastVerseNumber(root.bible, root.book, root.chapter)
@@ -71,7 +86,46 @@ Item {
   signal requestClose()
   signal requestExpand()
   signal requestCollapse()
+  signal requestPopout()
+  signal requestFullscreen()
   signal requestVerseFocus()
+
+  function colorChannelLum(value) {
+    var channel = Number(value)
+    if (!isFinite(channel)) return 0
+    return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
+  }
+
+  function colorLum(c) {
+    if (!c) return 0
+    if (typeof c === "string") c = Qt.color(c)
+    return 0.2126 * root.colorChannelLum(c.r) + 0.7152 * root.colorChannelLum(c.g) + 0.0722 * root.colorChannelLum(c.b)
+  }
+
+  function blendOver(fg, bg) {
+    if (!fg) return bg
+    if (typeof fg === "string") fg = Qt.color(fg)
+    if (typeof bg === "string") bg = Qt.color(bg)
+    var a = fg.a
+    if (!(a < 1)) return fg
+    return Qt.rgba(fg.r * a + bg.r * (1 - a), fg.g * a + bg.g * (1 - a), fg.b * a + bg.b * (1 - a), 1)
+  }
+
+  function contrastRatio(a, b) {
+    var l1 = root.colorLum(a)
+    var l2 = root.colorLum(b)
+    var hi = Math.max(l1, l2)
+    var lo = Math.min(l1, l2)
+    return (hi + 0.05) / (lo + 0.05)
+  }
+
+  function contrastTextOn(fill, surface) {
+    var bg = root.blendOver(fill, surface || Color.background)
+    var light = Qt.rgba(1, 1, 1, 1)
+    var dark = Qt.rgba(0.07, 0.07, 0.08, 1)
+    if (root.contrastRatio(root.foreground, bg) >= 4.5) return root.foreground
+    return root.contrastRatio(light, bg) >= root.contrastRatio(dark, bg) ? light : dark
+  }
 
   function fileUrlToPath(url) {
     var s = String(url || "")
@@ -81,26 +135,58 @@ Item {
 
   function persist() {
     if (!root.stateReady) return
+    root.writingState = true
     stateFile.setText(Bible.serializeState(root.selection))
   }
 
   function applyPlace(book, chapter, startVerse, endVerse, persistNow) {
     if (!book || GrabBcv.chapterCount(book) < 1) return false
     var nextChapter = Math.max(1, Math.min(GrabBcv.chapterCount(book), Math.floor(chapter || 1)))
-    var start = Bible.clampVerse(root.bible, book, nextChapter, startVerse || 1)
-    var end = Bible.clampVerse(root.bible, book, nextChapter, endVerse || start)
-    var range = Bible.orderedRange(start, end)
+    var startNum = Math.floor(Number(startVerse))
+    var endNum = Math.floor(Number(endVerse))
+    var hasSel = startNum >= 1 && endNum >= 1
     root.book = book
     root.chapter = nextChapter
-    root.startVerse = range.start
-    root.endVerse = range.end
-    root.focusVerse = range.end
-    root.anchorVerse = range.start
+    if (!hasSel) {
+      root.startVerse = 0
+      root.endVerse = 0
+      root.focusVerse = 1
+      root.anchorVerse = 1
+    } else {
+      var start = Bible.clampVerse(root.bible, book, nextChapter, startNum)
+      var end = Bible.clampVerse(root.bible, book, nextChapter, endNum)
+      var range = Bible.orderedRange(start, end)
+      root.startVerse = range.start
+      root.endVerse = range.end
+      root.focusVerse = range.end
+      root.anchorVerse = range.start
+    }
     root.mode = "read"
     root.searchError = ""
     if (persistNow !== false) root.persist()
+    if (!root.suppressSearchSync) root.syncSearchToChapter()
     Qt.callLater(root.scrollToFocus)
     return true
+  }
+
+  function syncSearchToChapter() {
+    var name = GrabBcv.bookName(root.book)
+    if (!name) return
+    var next = name + " " + root.chapter
+    var start = Math.floor(Number(root.startVerse))
+    var end = Math.floor(Number(root.endVerse))
+    var total = root.verseTotal
+    var whole = start <= 1 && end >= total && total > 0
+    if (start >= 1 && end >= 1 && !whole) {
+      next += ":" + start
+      if (end !== start) next += "-" + end
+    }
+    if (root.searchText === next) return
+    root.searchText = next
+    if (searchField) {
+      searchField.text = next
+      if (searchField.activeFocus) searchField.cursorPosition = next.length
+    }
   }
 
   function applyParsed(passage, persistNow) {
@@ -112,22 +198,46 @@ Item {
       endVerse = startVerse
     }
     if (!passage.startVerse && !passage.endVerse) {
-      var total = Bible.lastVerseNumber(root.bible, passage.startBook, passage.startChapter)
-      startVerse = 1
-      endVerse = total
+      startVerse = 0
+      endVerse = 0
     }
     return root.applyPlace(passage.startBook, passage.startChapter, startVerse, endVerse, persistNow)
   }
 
   function selectVerse(n) {
     var verse = Bible.clampVerse(root.bible, root.book, root.chapter, n)
+    var alreadyFocused = verse === root.focusVerse
     root.extending = false
     root.anchorVerse = verse
     root.focusVerse = verse
     root.startVerse = verse
     root.endVerse = verse
+    root.hoverLocked = true
+    if (pointerGate) pointerGate.reset()
     root.persist()
-    root.scrollToFocus()
+    if (!root.suppressSearchSync) root.syncSearchToChapter()
+    if (!alreadyFocused) root.scrollToFocus()
+  }
+
+  function selectHovered() {
+    var verse = root.focusVerse
+    root.ignoreNav = true
+    root.selectVerse(verse)
+    Qt.callLater(function() {
+      root.focusVerse = verse
+      root.ignoreNav = false
+    })
+  }
+
+  function beginSpaceHold() {
+    if (root.mode !== "read") return
+    if (root.spaceHeld) return
+    root.spaceHeld = true
+    root.selectVerse(root.focusVerse)
+  }
+
+  function endSpaceHold() {
+    root.spaceHeld = false
   }
 
   function selectRange(a, b) {
@@ -139,7 +249,8 @@ Item {
     root.endVerse = range.end
     root.focusVerse = Bible.clampVerse(root.bible, root.book, root.chapter, b)
     root.persist()
-    root.scrollToFocus()
+    if (!root.suppressSearchSync) root.syncSearchToChapter()
+    if (!root.dragging) root.scrollToFocus()
   }
 
   function selectWholeChapter() {
@@ -149,11 +260,13 @@ Item {
     root.startVerse = 1
     root.endVerse = root.verseTotal
     root.persist()
+    if (!root.suppressSearchSync) root.syncSearchToChapter()
   }
 
   function moveFocus(delta, extend) {
     if (root.mode !== "read") return
     var next = Bible.clampVerse(root.bible, root.book, root.chapter, root.focusVerse + delta)
+    if (pointerGate) pointerGate.reset()
     if (extend) {
       if (!root.extending) {
         root.anchorVerse = root.focusVerse
@@ -176,23 +289,23 @@ Item {
     if (!(max > 0)) max = 1
     if (delta > 0) {
       if (chapter < max) {
-        root.applyPlace(book, chapter + 1, 1, 1, true)
+        root.applyPlace(book, chapter + 1, 0, 0, true)
         return
       }
       var nextIdx = codes.indexOf(book) + 1
       if (nextIdx > 0 && nextIdx < codes.length)
-        root.applyPlace(codes[nextIdx], 1, 1, 1, true)
+        root.applyPlace(codes[nextIdx], 1, 0, 0, true)
       return
     }
     if (chapter > 1) {
-      root.applyPlace(book, chapter - 1, 1, 1, true)
+      root.applyPlace(book, chapter - 1, 0, 0, true)
       return
     }
     var prevIdx = codes.indexOf(book) - 1
     if (prevIdx >= 0) {
       var prev = codes[prevIdx]
       var prevMax = GrabBcv.chapterCount(prev)
-      root.applyPlace(prev, prevMax > 0 ? prevMax : 1, 1, 1, true)
+      root.applyPlace(prev, prevMax > 0 ? prevMax : 1, 0, 0, true)
     }
   }
 
@@ -200,7 +313,7 @@ Item {
     var codes = GrabBcv.bookCodes() || []
     var idx = codes.indexOf(root.book) + (delta > 0 ? 1 : -1)
     if (idx < 0 || idx >= codes.length) return
-    root.applyPlace(codes[idx], 1, 1, 1, true)
+    root.applyPlace(codes[idx], 1, 0, 0, true)
   }
 
   function refreshSuggestions() {
@@ -212,10 +325,25 @@ Item {
     root.searchHint = GrabBcv.typingHint(root.searchText)
     if (!root.searchHint && rows.length > 0 && rows[0].extra)
       root.searchHint = rows[0].extra
+    if (parsed && parsed.ok) root.previewTypedPlace(parsed.passage)
+  }
+
+  function previewTypedPlace(passage) {
+    if (!passage || !passage.startBook) return
+    var start = passage.startVerse || 0
+    var end = passage.endVerse || 0
+    if (passage.startBook === root.book && passage.startChapter === root.chapter
+        && start === root.startVerse && end === root.endVerse)
+      return
+    root.suppressSearchSync = true
+    root.applyParsed(passage, true)
+    root.suppressSearchSync = false
   }
 
   function acceptTopSuggestion() {
-    var row = root.suggestions.length > 0 ? root.suggestions[0] : null
+    var idx = root.suggestionIndex
+    if (idx < 0 || idx >= root.suggestions.length) idx = 0
+    var row = root.suggestions.length > 0 ? root.suggestions[idx] : null
     if (!row) return false
     var insert = String(row.insertText || "").replace(/\s+$/g, "")
     if (!insert) return false
@@ -224,7 +352,11 @@ Item {
     searchField.text = insert
     searchField.cursorPosition = insert.length
     var parsed = GrabBcv.tryParse(row.insertText || row.canonical)
-    if (parsed && parsed.ok) root.applyParsed(parsed.passage, true)
+    if (parsed && parsed.ok) {
+      root.suppressSearchSync = true
+      root.applyParsed(parsed.passage, true)
+      root.suppressSearchSync = false
+    }
     Qt.callLater(function() {
       searchField.forceActiveFocus()
       searchField.cursorPosition = searchField.text.length
@@ -261,6 +393,10 @@ Item {
     return null
   }
 
+  function searchOpensRoute() {
+    return root.parsedOrSelection() !== null
+  }
+
   function routeNow() {
     var parsed = root.parsedOrSelection()
     if (parsed) root.applyParsed(parsed, true)
@@ -285,19 +421,166 @@ Item {
     Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(payload) + " | wl-copy"])
   }
 
+  function navOnce() {
+    var t = Date.now()
+    if (t - root.lastNavAt < 8) return false
+    root.lastNavAt = t
+    return true
+  }
+
   function openBooks() {
     root.testament = Bible.testamentOf(root.book, root.bookCodeList)
     root.mode = "books"
+    root.focusBook = root.book
+    root.clampFocusBook()
+    Qt.callLater(root.scrollBookFocus)
+  }
+
+  function openChapters() {
+    root.mode = "chapters"
+    root.focusChapter = root.chapter
+    Qt.callLater(root.scrollChapterFocus)
   }
 
   function pickBook(code) {
+    if (!code) return
     root.book = code
+    root.focusBook = code
     root.chapter = 1
+    root.focusChapter = 1
     root.mode = "chapters"
+    Qt.callLater(root.scrollChapterFocus)
   }
 
   function pickChapter(n) {
-    root.applyPlace(root.book, n, 1, 1, true)
+    root.applyPlace(root.book, n, 0, 0, true)
+  }
+
+  function clampFocusBook() {
+    var books = root.visibleBooks || []
+    if (books.length === 0) {
+      root.focusBook = ""
+      return
+    }
+    if (books.indexOf(root.focusBook) >= 0) return
+    if (books.indexOf(root.book) >= 0) {
+      root.focusBook = root.book
+      return
+    }
+    root.focusBook = books[0]
+  }
+
+  function scrollBookFocus() {
+    if (!bookList.count) return
+    var books = root.visibleBooks || []
+    var idx = books.indexOf(root.focusBook)
+    if (idx < 0) return
+    bookList.positionViewAtIndex(idx, ListView.Contain)
+  }
+
+  function scrollChapterFocus() {
+    if (!chapterGrid.count) return
+    var idx = Math.max(0, (root.focusChapter || 1) - 1)
+    chapterGrid.positionViewAtIndex(idx, GridView.Contain)
+  }
+
+  function chapterColumns() {
+    if (!chapterGrid || !(chapterGrid.cellWidth > 0)) return 6
+    return Math.max(1, Math.floor(chapterGrid.width / chapterGrid.cellWidth))
+  }
+
+  function switchTestament(dx) {
+    var next = dx < 0 ? "ot" : "nt"
+    if (root.testament === next) return
+    root.testament = next
+    root.clampFocusBook()
+    root.scrollBookFocus()
+  }
+
+  function moveBookFocus(dy) {
+    var books = root.visibleBooks || []
+    if (books.length === 0) return
+    var idx = books.indexOf(root.focusBook)
+    if (idx < 0) idx = 0
+    var next = idx + dy
+    if (next < 0) {
+      root.focusSearch(false)
+      return
+    }
+    if (next >= books.length) next = books.length - 1
+    root.focusBook = books[next]
+    root.scrollBookFocus()
+  }
+
+  function moveChapterFocus(dx, dy) {
+    var total = GrabBcv.chapterCount(root.book)
+    if (!(total > 0)) return
+    var cols = root.chapterColumns()
+    var current = Math.max(1, Math.min(total, root.focusChapter || 1))
+    if (dy < 0 && current <= cols) {
+      root.mode = "read"
+      root.requestVerseFocus()
+      return
+    }
+    var next = current + dx + dy * cols
+    if (next < 1) next = 1
+    if (next > total) next = total
+    root.focusChapter = next
+    root.scrollChapterFocus()
+  }
+
+  function activateHovered() {
+    if (root.mode === "books") {
+      root.pickBook(root.focusBook)
+      return
+    }
+    if (root.mode === "chapters") {
+      root.pickChapter(root.focusChapter)
+      return
+    }
+    root.selectHovered()
+  }
+
+  function handleHome() {
+    if (root.mode === "books") {
+      var books = root.visibleBooks || []
+      if (books.length) root.focusBook = books[0]
+      root.scrollBookFocus()
+      return
+    }
+    if (root.mode === "chapters") {
+      root.focusChapter = 1
+      root.scrollChapterFocus()
+      return
+    }
+    root.selectVerse(1)
+  }
+
+  function handleEnd() {
+    if (root.mode === "books") {
+      var books = root.visibleBooks || []
+      if (books.length) root.focusBook = books[books.length - 1]
+      root.scrollBookFocus()
+      return
+    }
+    if (root.mode === "chapters") {
+      root.focusChapter = Math.max(1, GrabBcv.chapterCount(root.book))
+      root.scrollChapterFocus()
+      return
+    }
+    root.selectVerse(root.verseTotal)
+  }
+
+  function handlePage(delta, extend) {
+    if (root.mode === "books") {
+      root.moveBookFocus(delta)
+      return
+    }
+    if (root.mode === "chapters") {
+      root.moveChapterFocus(0, delta > 0 ? 2 : -2)
+      return
+    }
+    root.moveFocus(delta, extend === true || root.spaceHeld)
   }
 
   function focusSearch(selectAll) {
@@ -309,12 +592,62 @@ Item {
     }
   }
 
+  function typeIntoSearch(ch) {
+    var next = String(ch || "")
+    if (!next) return
+    if (root.mode !== "books") root.mode = "read"
+    root.searchError = ""
+    root.searchText = next
+    searchField.text = next
+    searchField.forceActiveFocus()
+    searchField.cursorPosition = next.length
+    if (root.mode === "books") root.clampFocusBook()
+  }
+
+  function moveSuggestion(delta) {
+    var rows = root.suggestions || []
+    if (root.mode !== "read" || rows.length < 2) return false
+    var idx = root.suggestionIndex
+    if (idx < 0) idx = 0
+    var next = idx + delta
+    if (next < 0) {
+      root.suggestionIndex = 0
+      return true
+    }
+    if (next >= rows.length) return false
+    root.suggestionIndex = next
+    return true
+  }
+
+  function handleSearchArrow(delta) {
+    if (!root.navOnce()) return
+    if (root.moveSuggestion(delta)) return
+    if (delta > 0) root.enterFromSearch()
+  }
+
+  function enterFromSearch() {
+    if (root.mode === "books") {
+      searchField.focus = false
+      root.clampFocusBook()
+      root.requestVerseFocus()
+      Qt.callLater(root.scrollBookFocus)
+      return
+    }
+    if (root.mode === "chapters") {
+      searchField.focus = false
+      root.requestVerseFocus()
+      return
+    }
+    root.enterVersesFromSearch()
+  }
+
   function enterVersesFromSearch() {
     root.mode = "read"
     root.suggestionIndex = -1
     root.extending = false
     root.focusVerse = 1
     searchField.focus = false
+    if (pointerGate) pointerGate.reset()
     Qt.callLater(function() {
       root.requestVerseFocus()
       root.scrollToFocus()
@@ -334,18 +667,16 @@ Item {
   }
 
   function handleEscape() {
-    if (root.searchText) {
-      root.searchText = ""
-      searchField.text = ""
-      root.suggestions = []
-      root.searchError = ""
-      return true
-    }
-    if (root.mode === "chapters") {
-      root.mode = "books"
+    if (root.searchActive) {
+      searchField.focus = false
+      root.syncSearchToChapter()
       return true
     }
     if (root.mode === "books") {
+      root.openChapters()
+      return true
+    }
+    if (root.mode === "chapters") {
       root.mode = "read"
       return true
     }
@@ -353,32 +684,56 @@ Item {
   }
 
   function handleMove(dx, dy, extend) {
+    if (root.ignoreNav) return
+    if (!root.navOnce()) return
+    if (root.mode === "books") {
+      if (dx !== 0) root.switchTestament(dx)
+      if (dy !== 0) root.moveBookFocus(dy)
+      return
+    }
+    if (root.mode === "chapters") {
+      root.moveChapterFocus(dx, dy)
+      return
+    }
     if (dx !== 0) {
+      if (dx < 0 && prevBtn) prevBtn.pulse()
+      else if (dx > 0 && nextBtn) nextBtn.pulse()
       root.stepChapter(dx)
       return
     }
-    if (root.mode === "books" || root.mode === "chapters") return
-    if (dy < 0 && !extend && root.focusVerse <= 1) {
+    var grow = extend === true || root.spaceHeld
+    if (dy < 0 && !grow && root.focusVerse <= 1) {
       root.focusSearch(false)
       return
     }
-    if (dy !== 0) root.moveFocus(dy, extend === true)
+    if (dy !== 0) root.moveFocus(dy, grow)
   }
 
   function handleTextKey(text) {
     var t = String(text || "")
-    if (t === "b" || t === "B") { root.openBooks(); return }
-    if (t === "c" || t === "C") { root.mode = "chapters"; return }
+    if (t === "b" || t === "B") { if (booksBtn) booksBtn.pulse(); root.openBooks(); return }
+    if (t === "c" || t === "C") { root.openChapters(); return }
     if (t === "g" || t === "G" || t === "/") { root.focusSearch(); return }
     if (t === "o" || t === "O") { root.routeNow(); return }
     if (t === "m" || t === "M") { root.outlineNow(); return }
-    if (t === "y" || t === "Y") { root.copyUrl(); return }
+    if (t === "y" || t === "Y") { if (copyBtn) copyBtn.pulse(); root.copyUrl(); return }
     if (t === "f" || t === "F") {
-      if (root.expanded) root.requestCollapse()
-      else root.requestExpand()
+      if (root.expanded) {
+        if (popoutBtn && root.windowed) popoutBtn.pulse()
+        else if (chromeBtn) chromeBtn.pulse()
+        root.requestCollapse()
+      } else {
+        if (chromeBtn) chromeBtn.pulse()
+        root.requestExpand()
+      }
       return
     }
-    if (t.length === 1 && t.charCodeAt(0) >= 32) root.focusSearch()
+    if (t.length === 1 && /[A-Za-z0-9]/.test(t)) root.typeIntoSearch(t)
+  }
+
+  PointerMoveGate {
+    id: pointerGate
+    referenceItem: verseList
   }
 
   FileView {
@@ -398,15 +753,32 @@ Item {
     atomicWrites: true
     printErrors: false
     onLoaded: {
+      if (root.writingState) {
+        root.writingState = false
+        root.stateReady = true
+        return
+      }
       var place = Bible.parseState(text())
+      if (root.stateReady
+          && place.book === root.book
+          && place.chapter === root.chapter
+          && place.startVerse === root.startVerse
+          && place.endVerse === root.endVerse) {
+        root.stateReady = true
+        return
+      }
       root.applyPlace(place.book, place.chapter, place.startVerse, place.endVerse, false)
       root.stateReady = true
     }
     onLoadFailed: {
+      root.writingState = false
       root.applyPlace(Bible.defaultBook(), Bible.defaultChapter(), Bible.defaultVerse(), Bible.defaultVerse(), false)
       root.stateReady = true
     }
-    onFileChanged: reload()
+    onFileChanged: {
+      if (root.writingState) return
+      reload()
+    }
   }
 
   Item {
@@ -418,154 +790,109 @@ Item {
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
-      height: Math.max(Style.space(28), titleCol.implicitHeight)
+      height: Math.max(Style.space(28), searchField.implicitHeight, headerRight.implicitHeight)
 
-      Button {
-        id: prevBtn
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(28)
-        implicitHeight: Style.space(28)
-        horizontalPadding: 0
-        verticalPadding: 0
-        iconText: "󰒮"
-        foreground: root.foreground
-        tooltipText: "Previous chapter"
-        onClicked: root.stepChapter(-1)
-      }
-
-      Button {
-        id: booksBtn
+      Row {
+        id: headerRight
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(28)
-        implicitHeight: Style.space(28)
-        horizontalPadding: 0
-        verticalPadding: 0
-        iconText: "󰂻"
-        foreground: root.mode === "read" ? root.muted : root.accent
-        tooltipText: "Books"
-        onClicked: {
-          if (root.mode === "read") root.openBooks()
-          else root.mode = "read"
-        }
-      }
+        spacing: Style.space(6)
 
-      IconButton {
-        id: expandBtn
-        anchors.right: booksBtn.left
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        iconSource: Qt.resolvedUrl(root.expanded ? "icons/restore.svg" : "icons/expand.svg")
-        foreground: root.foreground
-        tooltipText: root.expanded ? "Restore popup" : "Expand"
-        onClicked: {
-          if (root.expanded) root.requestCollapse()
-          else root.requestExpand()
-        }
-      }
-
-      Button {
-        id: nextBtn
-        anchors.right: expandBtn.left
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(28)
-        implicitHeight: Style.space(28)
-        horizontalPadding: 0
-        verticalPadding: 0
-        iconText: "󰒭"
-        foreground: root.foreground
-        tooltipText: "Next chapter"
-        onClicked: root.stepChapter(1)
-      }
-
-      Column {
-        id: titleCol
-        anchors.left: prevBtn.right
-        anchors.right: nextBtn.left
-        anchors.leftMargin: Style.space(6)
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(2)
-
-        Text {
-          width: parent.width
-          text: root.displayLabel
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
-          elide: Text.ElideRight
-          horizontalAlignment: Text.AlignHCenter
-        }
-
-        Text {
-          width: parent.width
-          text: "BSB"
-          color: root.muted
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          horizontalAlignment: Text.AlignHCenter
-        }
-      }
-    }
-
-    TextField {
-      id: searchField
-      anchors.top: header.bottom
-      anchors.topMargin: Style.space(8)
-      anchors.left: parent.left
-      anchors.right: parent.right
-      placeholderText: "jn 3:16–18"
-      foreground: root.foreground
-      font.family: root.fontFamily
-      text: root.searchText
-      onTextChanged: {
-        root.searchText = text
-        root.searchError = ""
-        root.refreshSuggestions()
-      }
-      Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape) {
-          if (!root.handleEscape()) {
-            searchField.focus = false
-            root.requestVerseFocus()
+        IconButton {
+          id: popoutBtn
+          visible: root.expanded && !root.fullscreen
+          iconSource: Qt.resolvedUrl("icons/window.svg")
+          foreground: root.foreground
+          tooltipText: root.windowed ? "Dock overlay" : "Pop out window"
+          onClicked: {
+            if (root.windowed) root.requestCollapse()
+            else root.requestPopout()
           }
-          event.accepted = true
-        } else if (event.key === Qt.Key_Down) {
-          root.enterVersesFromSearch()
-          event.accepted = true
-        } else if (event.key === Qt.Key_Tab) {
-          if (!root.acceptTopSuggestion()) root.enterVersesFromSearch()
-          event.accepted = true
-        } else if (event.key === Qt.Key_Up) {
-          event.accepted = true
-        } else if (event.key === Qt.Key_Left) {
-          root.stepChapter(-1)
-          event.accepted = true
-        } else if (event.key === Qt.Key_Right) {
-          root.stepChapter(1)
-          event.accepted = true
-        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-          if (event.modifiers & Qt.ControlModifier) root.routeNow()
-          else if (event.modifiers & Qt.ShiftModifier) root.outlineNow()
-          else if (!root.acceptTopSuggestion()) root.submitSearch()
-          event.accepted = true
+        }
+
+        IconButton {
+          id: chromeBtn
+          visible: !root.expanded
+          iconSource: Qt.resolvedUrl("icons/expand.svg")
+          foreground: root.foreground
+          tooltipText: "Expand overlay"
+          onClicked: root.requestExpand()
+        }
+
+        IconButton {
+          id: copyBtn
+          iconSource: Qt.resolvedUrl("icons/copy.svg")
+          foreground: root.foreground
+          tooltipText: "Copy text and URL"
+          onClicked: root.copyText()
+        }
+
+        Button {
+          text: "Open  ↵"
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          selected: true
+          tooltipText: "Open the current selection on route.bible"
+          onClicked: root.routeNow()
+        }
+      }
+
+      TextField {
+        id: searchField
+        anchors.left: parent.left
+        anchors.right: headerRight.left
+        anchors.rightMargin: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        placeholderText: "jn 3:16–18"
+        foreground: root.foreground
+        accent: root.accent
+        placeholderTextColor: root.muted
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        text: root.searchText
+        onTextChanged: {
+          root.searchText = text
+          root.searchError = ""
+          root.refreshSuggestions()
+        }
+        Keys.onPressed: function(event) {
+          if (event.key === Qt.Key_Escape) {
+            if (!root.handleEscape()) {
+              searchField.focus = false
+              root.requestVerseFocus()
+            }
+            event.accepted = true
+          } else if (event.key === Qt.Key_Down) {
+            root.handleSearchArrow(1)
+            event.accepted = true
+          } else if (event.key === Qt.Key_Tab) {
+            if (!root.acceptTopSuggestion()) root.enterVersesFromSearch()
+            event.accepted = true
+          } else if (event.key === Qt.Key_Up) {
+            root.handleSearchArrow(-1)
+            event.accepted = true
+          } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            if (event.modifiers & Qt.ControlModifier) root.routeNow()
+            else if (event.modifiers & Qt.ShiftModifier) root.outlineNow()
+            else if (root.searchOpensRoute()) root.routeNow()
+            else if (!root.acceptTopSuggestion()) root.submitSearch()
+            event.accepted = true
+          }
         }
       }
     }
 
     Text {
       id: errorLabel
-      anchors.top: searchField.bottom
+      anchors.top: header.bottom
       anchors.topMargin: visible ? Style.space(4) : 0
       anchors.left: parent.left
       anchors.right: parent.right
       height: visible ? implicitHeight : 0
       visible: root.searchError !== ""
       text: root.searchError
-      color: Color.urgent
+      color: root.urgent
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       wrapMode: Text.WordWrap
@@ -586,27 +913,43 @@ Item {
       elide: Text.ElideRight
     }
 
-    Column {
+    BorderSurface {
       id: suggestionBox
       anchors.top: hintLabel.bottom
       anchors.topMargin: visible ? Style.space(4) : 0
       anchors.left: parent.left
       anchors.right: parent.right
-      height: visible ? implicitHeight : 0
-      spacing: Style.space(2)
+      height: visible ? suggestionCol.implicitHeight + contentTopInset + contentBottomInset : 0
       visible: root.searchActive && root.suggestions.length > 0 && root.mode === "read"
+      radius: Style.cornerRadius
+      color: Style.controlFill(false, false, root.foreground, root.accent)
+      borderSpec: Border.controlSpec("normal", root.foreground, root.accent)
+      padding: Style.space(4)
 
-      Repeater {
-        model: root.suggestions
-        delegate: Button {
-          required property var modelData
-          required property int index
-          width: suggestionBox.width
-          text: modelData.label
-          selected: index === root.suggestionIndex
-          foreground: root.foreground
-          leftAlign: true
-          onClicked: root.applySuggestion(modelData)
+      Column {
+        id: suggestionCol
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.leftMargin: suggestionBox.contentLeftInset
+        anchors.rightMargin: suggestionBox.contentRightInset
+        anchors.topMargin: suggestionBox.contentTopInset
+        spacing: Style.space(2)
+
+        Repeater {
+          model: root.suggestions
+          delegate: Button {
+            required property var modelData
+            required property int index
+            width: suggestionCol.width
+            text: modelData.label
+            selected: index === root.suggestionIndex
+            foreground: root.foreground
+            accent: root.accent
+            fontFamily: root.fontFamily
+            leftAlign: true
+            onClicked: root.applySuggestion(modelData)
+          }
         }
       }
     }
@@ -638,7 +981,8 @@ Item {
           width: ListView.view ? ListView.view.width : 1
           height: verseText.implicitHeight
 
-          readonly property bool selected: modelData.n >= Math.min(root.startVerse, root.endVerse)
+          readonly property bool selected: root.startVerse >= 1 && root.endVerse >= 1
+            && modelData.n >= Math.min(root.startVerse, root.endVerse)
             && modelData.n <= Math.max(root.startVerse, root.endVerse)
           readonly property bool hovered: !root.searchActive && modelData.n === root.focusVerse
 
@@ -646,8 +990,8 @@ Item {
             anchors.fill: parent
             radius: Style.cornerRadius
             color: parent.selected
-              ? Style.selectionFillFor(root.foreground, root.accent)
-              : (parent.hovered ? Style.controlFill(false, true, root.foreground, root.accent) : "transparent")
+              ? root.selectionFill
+              : (parent.hovered ? root.hoverFill : "transparent")
           }
 
           Rectangle {
@@ -664,7 +1008,7 @@ Item {
             id: verseText
             width: parent.width
             text: modelData.n + "  " + modelData.t
-            color: parent.hovered ? root.accent : root.foreground
+            color: parent.selected ? root.selectedTextColor : (parent.hovered ? root.accent : root.foreground)
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
             font.bold: parent.hovered
@@ -677,7 +1021,7 @@ Item {
           anchors.fill: parent
           acceptedButtons: Qt.LeftButton
           hoverEnabled: true
-          preventStealing: root.dragging
+          preventStealing: true
           cursorShape: Qt.IBeamCursor
           onPressed: function(mouse) {
             root.requestVerseFocus()
@@ -700,6 +1044,9 @@ Item {
               if (mouse.y < 24) verseList.flick(0, 420)
               else if (mouse.y > height - 24) verseList.flick(0, -420)
             } else {
+              if (root.ignoreNav) return
+              if (!pointerGate.moved(verseList, mouse)) return
+              root.hoverLocked = false
               root.focusVerse = verse
             }
           }
@@ -716,80 +1063,139 @@ Item {
         visible: root.mode !== "read"
         spacing: Style.space(8)
 
+        Button {
+          id: booksBtn
+          visible: root.mode === "chapters"
+          width: parent.width
+          text: "Books"
+          bordered: true
+          leftAlign: true
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          tooltipText: "Choose a different book"
+          onClicked: root.openBooks()
+        }
+
         ButtonGroup {
           width: parent.width
           visible: root.mode === "books"
           foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
           value: root.testament
+          focusable: false
           options: [
             { value: "ot", label: "Old Testament" },
             { value: "nt", label: "New Testament" }
           ]
           onChanged: function(value) {
             root.testament = value
+            root.clampFocusBook()
+            root.scrollBookFocus()
           }
         }
 
         ListView {
+          id: bookList
           width: parent.width
-          height: parent.height - (root.mode === "books" ? Style.space(40) : 0)
+          height: parent.height - Style.space(40)
           clip: true
           visible: root.mode === "books"
           model: root.visibleBooks
           boundsBehavior: Flickable.StopAtBounds
+          keyNavigationEnabled: false
+          activeFocusOnTab: false
+          focus: false
           delegate: Item {
             required property var modelData
             width: ListView.view ? ListView.view.width : 1
             height: Style.space(28)
 
+            readonly property bool selected: modelData === root.book
+            readonly property bool hovered: !root.searchActive && modelData === root.focusBook
+
+            Rectangle {
+              anchors.fill: parent
+              radius: Style.cornerRadius
+              color: parent.hovered ? root.hoverFill : "transparent"
+            }
+
+            Rectangle {
+              visible: parent.hovered
+              width: Math.max(2, Style.space(2))
+              anchors.left: parent.left
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              radius: width
+              color: root.accent
+            }
+
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(8)
               text: GrabBcv.bookName(modelData)
-              color: modelData === root.book ? root.accent : root.foreground
+              color: parent.hovered || parent.selected ? root.accent : root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
-              font.bold: modelData === root.book
+              font.bold: parent.hovered || parent.selected
             }
 
             MouseArea {
               anchors.fill: parent
+              hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: root.pickBook(modelData)
+              onEntered: root.focusBook = modelData
             }
           }
         }
 
         GridView {
+          id: chapterGrid
           width: parent.width
-          height: parent.height
           visible: root.mode === "chapters"
+          height: parent.height - Style.space(40)
           cellWidth: Style.space(40)
           cellHeight: Style.space(32)
           clip: true
+          keyNavigationEnabled: false
+          activeFocusOnTab: false
+          focus: false
           model: GrabBcv.chapterCount(root.book)
           delegate: Item {
             required property int index
             width: Style.space(36)
             height: Style.space(28)
 
+            readonly property int chapterNumber: index + 1
+            readonly property bool selected: chapterNumber === root.chapter
+            readonly property bool hovered: !root.searchActive && chapterNumber === root.focusChapter
+
             Rectangle {
               anchors.fill: parent
               radius: Style.cornerRadius
-              color: (index + 1) === root.chapter ? Style.selectionFillFor(root.foreground, root.accent) : "transparent"
+              color: parent.selected
+                ? root.selectionFill
+                : (parent.hovered ? root.hoverFill : "transparent")
             }
 
             Text {
               anchors.centerIn: parent
-              text: index + 1
-              color: (index + 1) === root.chapter ? root.accent : root.foreground
+              text: parent.chapterNumber
+              color: parent.hovered || parent.selected ? root.accent : root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
+              font.bold: parent.hovered
             }
 
             MouseArea {
               anchors.fill: parent
+              hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: root.pickChapter(index + 1)
+              onClicked: root.pickChapter(parent.chapterNumber)
+              onEntered: root.focusChapter = parent.chapterNumber
             }
           }
         }
@@ -801,60 +1207,85 @@ Item {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.bottom: parent.bottom
-      height: footerRow.implicitHeight
+      height: Math.max(Style.space(28), titleHit.height)
 
-      Row {
-        id: footerRow
+      IconButton {
+        id: prevBtn
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        iconText: "󰒮"
+        foreground: root.foreground
+        tooltipText: "Previous chapter"
+        onClicked: root.stepChapter(-1)
+      }
+
+      IconButton {
+        id: nextBtn
         anchors.right: parent.right
-        spacing: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        iconText: "󰒭"
+        foreground: root.foreground
+        tooltipText: "Next chapter"
+        onClicked: root.stepChapter(1)
+      }
 
-        IconButton {
-          iconSource: Qt.resolvedUrl("icons/copy.svg")
-          foreground: root.foreground
-          tooltipText: "Copy text and URL"
-          onClicked: root.copyText()
+      Item {
+        id: titleHit
+        anchors.left: prevBtn.right
+        anchors.right: nextBtn.left
+        anchors.leftMargin: Style.space(6)
+        anchors.rightMargin: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        height: titleCol.implicitHeight
+
+        Column {
+          id: titleCol
+          width: parent.width
+          spacing: Style.space(2)
+
+          Text {
+            width: parent.width
+            text: root.displayLabel
+            color: titleHover.containsMouse || root.mode === "chapters" ? root.accent : root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.subtitle
+            font.bold: true
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+          }
+
+          Text {
+            width: parent.width
+            text: "BSB"
+            color: root.muted
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            horizontalAlignment: Text.AlignHCenter
+          }
         }
 
-        Button {
-          text: "Outline"
-          bordered: true
-          foreground: root.foreground
-          tooltipText: "Open this passage in the margin.bible outliner"
-          onClicked: root.outlineNow()
-        }
-
-        Button {
-          text: "Open route.bible  ↵"
-          foreground: root.foreground
-          accent: root.accent
-          selected: true
-          tooltipText: "Open the current selection on route.bible"
-          onClicked: root.routeNow()
+        MouseArea {
+          id: titleHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            if (root.mode === "chapters") root.mode = "read"
+            else root.openChapters()
+          }
         }
       }
     }
   }
 
-  Shortcut { enabled: root.keysLive; sequence: "Left"; onActivated: root.stepChapter(-1) }
-  Shortcut { enabled: root.keysLive; sequence: "Right"; onActivated: root.stepChapter(1) }
   Shortcut {
-    enabled: root.keysLive
+    enabled: root.keysLive && root.searchActive
     sequence: "Down"
-    onActivated: {
-      if (root.searchActive) root.enterVersesFromSearch()
-      else root.handleMove(0, 1, false)
-    }
+    onActivated: root.handleSearchArrow(1)
   }
   Shortcut {
-    enabled: root.keysLive
+    enabled: root.keysLive && root.searchActive
     sequence: "Up"
-    onActivated: {
-      if (root.searchActive) return
-      root.handleMove(0, -1, false)
-    }
+    onActivated: root.handleSearchArrow(-1)
   }
-  Shortcut { enabled: root.keysLive; sequence: "Shift+Down"; onActivated: root.handleMove(0, 1, true) }
-  Shortcut { enabled: root.keysLive; sequence: "Shift+Up"; onActivated: root.handleMove(0, -1, true) }
-  Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Space"; onActivated: root.selectVerse(root.focusVerse) }
-  Shortcut { enabled: root.keysLive && !root.searchActive; sequence: "Shift+Space"; onActivated: root.handleMove(0, -1, true) }
 }

@@ -40,19 +40,25 @@ var RouteApi = (function() {
     MARGIN_BASE: () => MARGIN_BASE,
     ROUTE_BASE: () => ROUTE_BASE,
     ROUTE_SRC: () => ROUTE_SRC,
+    ROUTE_UTM_MEDIUM: () => ROUTE_UTM_MEDIUM,
     marginUrl: () => marginUrl,
     routeUrl: () => routeUrl
   });
-  var ROUTE_BASE = "https://www.route.bible";
-  var ROUTE_SRC = "omarchy";
+  var ROUTE_BASE = "https://route.bible";
+  var ROUTE_SRC = "route_bible_omarchy";
+  var ROUTE_UTM_MEDIUM = "omarchy_plugin";
   var MARGIN_BASE = "https://margin.bible";
   function slugFor(canonical) {
     return String(canonical || "").trim().toLowerCase().replace(/^\/+/, "");
   }
+  function routeQuery() {
+    return `src=${ROUTE_SRC}&utm_source=${ROUTE_SRC}&utm_medium=${ROUTE_UTM_MEDIUM}`;
+  }
   function routeUrl(canonical) {
     const slug = slugFor(canonical);
-    if (!slug) return `${ROUTE_BASE}/?src=${ROUTE_SRC}`;
-    return `${ROUTE_BASE}/${encodeURIComponent(slug)}?src=${ROUTE_SRC}`;
+    const query = routeQuery();
+    if (!slug) return `${ROUTE_BASE}/?${query}`;
+    return `${ROUTE_BASE}/${encodeURIComponent(slug)}?${query}`;
   }
   function marginUrl(canonical) {
     const slug = slugFor(canonical);

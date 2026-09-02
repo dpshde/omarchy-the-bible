@@ -129,16 +129,26 @@ export function orderedRange(a: number, b: number): { start: number; end: number
   return left <= right ? { start: left, end: right } : { start: right, end: left };
 }
 
+export function hasVerseSelection(startVerse: number, endVerse: number): boolean {
+  return Math.floor(Number(startVerse)) >= 1 && Math.floor(Number(endVerse)) >= 1;
+}
+
 export function isWholeChapter(startVerse: number, endVerse: number, verseCount: number): boolean {
   return startVerse <= 1 && endVerse >= verseCount && verseCount > 0;
 }
 
+function isChapterLevel(selection: Selection, verseCount: number): boolean {
+  if (!hasVerseSelection(selection.startVerse, selection.endVerse)) return true;
+  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
+  return isWholeChapter(start, end, verseCount);
+}
+
 export function toCanonical(selection: Selection, verseCount: number): string {
   const { book, chapter } = selection;
-  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-  if (isWholeChapter(start, end, verseCount)) {
+  if (isChapterLevel(selection, verseCount)) {
     return `${book}.${chapter}`;
   }
+  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
   if (start === end) {
     return `${book}.${chapter}.${start}`;
   }
@@ -147,10 +157,10 @@ export function toCanonical(selection: Selection, verseCount: number): string {
 
 export function formatCompact(selection: Selection, verseCount: number): string {
   const abbrev = BOOK_ABBREV[selection.book] || selection.book;
-  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-  if (isWholeChapter(start, end, verseCount)) {
+  if (isChapterLevel(selection, verseCount)) {
     return `${abbrev} ${selection.chapter}`;
   }
+  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
   if (start === end) {
     return `${abbrev} ${selection.chapter}:${start}`;
   }
@@ -158,10 +168,10 @@ export function formatCompact(selection: Selection, verseCount: number): string 
 }
 
 export function formatDisplay(selection: Selection, bookName: string, verseCount: number): string {
-  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-  if (isWholeChapter(start, end, verseCount)) {
+  if (isChapterLevel(selection, verseCount)) {
     return `${bookName} ${selection.chapter}`;
   }
+  const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
   if (start === end) {
     return `${bookName} ${selection.chapter}:${start}`;
   }
@@ -218,6 +228,7 @@ export function booksForTestament(testament: "ot" | "nt", bookCodes: string[]): 
 }
 
 export function selectedText(bible: BibleIndex | null | undefined, selection: Selection): string {
+  if (!hasVerseSelection(selection.startVerse, selection.endVerse)) return "";
   const rows = versesFor(bible, selection.book, selection.chapter);
   const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
   return rows
@@ -235,6 +246,14 @@ export function serializeState(selection: Selection): string {
   });
 }
 
+function parseVerseBound(value: unknown, fallback: number): number {
+  if (value === 0 || value === "0") return 0;
+  if (value === undefined || value === null || value === "") return fallback;
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, n);
+}
+
 export function parseState(raw: string, fallback: Selection = {
   book: DEFAULT_BOOK,
   chapter: DEFAULT_CHAPTER,
@@ -242,12 +261,15 @@ export function parseState(raw: string, fallback: Selection = {
   endVerse: DEFAULT_VERSE
 }): Selection {
   try {
-    const parsed = JSON.parse(String(raw || "{}")) as Partial<Selection>;
+    const parsed = JSON.parse(String(raw || "{}")) as Record<string, unknown>;
     const book = typeof parsed.book === "string" && parsed.book ? parsed.book : fallback.book;
     const chapter = Math.max(1, Math.floor(Number(parsed.chapter) || fallback.chapter));
-    const startVerse = Math.max(1, Math.floor(Number(parsed.startVerse) || fallback.startVerse));
-    const endVerse = Math.max(startVerse, Math.floor(Number(parsed.endVerse) || startVerse));
-    return { book, chapter, startVerse, endVerse };
+    const startVerse = parseVerseBound(parsed.startVerse, fallback.startVerse);
+    const endVerse = parseVerseBound(parsed.endVerse, startVerse === 0 ? 0 : fallback.endVerse);
+    if (startVerse < 1 || endVerse < 1) {
+      return { book, chapter, startVerse: 0, endVerse: 0 };
+    }
+    return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse) };
   } catch {
     return { ...fallback };
   }

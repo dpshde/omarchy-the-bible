@@ -26,21 +26,23 @@ describe("tryParse", () => {
 });
 
 describe("suggest", () => {
-  it("returns john suggestions", () => {
-    const rows = suggest("john 3:1", 5);
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.some((row) => row.canonical.startsWith("JHN.3"))).toBe(true);
+  it("keeps suggestions until the exact book name is present", () => {
+    const rows = suggest("jn", 5);
+    expect(rows.some((row) => row.canonical === "JHN" || /john/i.test(row.label))).toBe(true);
+    expect(suggest("john", 5)).toEqual([]);
+    expect(suggest("John 3:1", 5)).toEqual([]);
   });
 
-  it("annotates books with chapter counts", () => {
-    const rows = suggest("jn", 5);
-    const john = rows.find((row) => row.canonical === "JHN" || row.insertText === "John");
-    expect(john?.extra).toMatch(/21 chapters/);
+  it("lists matching book names while the typed name is still a prefix or alias", () => {
+    const rows = suggest("jo", 8);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.every((row) => row.kind === "book")).toBe(true);
+    expect(rows.some((row) => row.canonical === "JHN" || /john/i.test(row.label))).toBe(true);
   });
 });
 
 describe("typingHint", () => {
-  it("reports chapters and verses for partial input", () => {
+  it("previews chapter and verse totals", () => {
     expect(typingHint("jn")).toBe("21 chapters in John");
     expect(typingHint("John 3")).toBe("36 verses in John 3");
     expect(typingHint("John 3:16")).toBe("36 verses in John 3");

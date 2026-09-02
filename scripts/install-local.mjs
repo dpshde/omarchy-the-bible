@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const lab = join(dirname(fileURLToPath(import.meta.url)), "..");
-const dest = join(process.env.HOME || "", ".config/omarchy/plugins/dpshade.route-bible");
+const dest = join(process.env.HOME || "", ".config/omarchy/plugins/io.github.dpshde.the-bible");
 
 const include = [
   "manifest.json",

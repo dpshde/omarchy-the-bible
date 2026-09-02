@@ -64,33 +64,36 @@ export function tryParse(input: string): ParseResult {
   return { ok: true, passage: plainPassage(value) };
 }
 
-function countExtra(kind: string, canonical: string): string {
-  if (kind === "book") {
-    const chapters = chapterCount(canonical);
-    if (!chapters) return "";
-    return `${chapters} chapter${chapters === 1 ? "" : "s"}`;
-  }
+function bookPrefix(input: string): string {
+  return String(input || "")
+    .trim()
+    .replace(/\s+\d[\s\d:\-–.]*$/, "")
+    .trim();
+}
 
-  const [book, chapterToken] = String(canonical || "").split(".");
-  const chapter = Number.parseInt(chapterToken || "", 10);
-  if (!book || !Number.isFinite(chapter) || chapter < 1) return "";
-  const verses = verseCount(book, chapter);
-  if (!verses) return "";
-  return `${verses} verse${verses === 1 ? "" : "s"}`;
+function hasExactBookName(input: string): boolean {
+  const prefix = bookPrefix(input);
+  if (!prefix) return false;
+  const book = resolveBook(prefix);
+  if (!book) return false;
+  const name = String(bookName(book) || "").replace(/\s+/g, " ").trim();
+  const typed = prefix.replace(/\s+/g, " ");
+  return !!name && typed.toLowerCase() === name.toLowerCase();
 }
 
 export function suggest(input: string, limit: number) {
   const cap = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 20) : 8;
-  return autocompletePassage(String(input || ""), { limit: cap }).map((item) => {
-    const extra = countExtra(item.kind, item.canonical);
-    return {
-      label: extra ? `${item.label}  ·  ${extra}` : item.label,
+  const raw = String(input || "");
+  if (hasExactBookName(raw)) return [];
+  return autocompletePassage(raw, { limit: cap })
+    .filter((item) => item.kind === "book")
+    .map((item) => ({
+      label: item.label,
       insertText: item.insertText,
       canonical: item.canonical,
       kind: item.kind,
-      extra
-    };
-  });
+      extra: ""
+    }));
 }
 
 export function typingHint(input: string): string {
@@ -117,7 +120,7 @@ export function typingHint(input: string): string {
     }
   }
 
-  const book = resolveBook(trimmed);
+  const book = resolveBook(bookPrefix(trimmed));
   if (book) {
     const chapters = chapterCount(book);
     if (chapters) return `${chapters} chapter${chapters === 1 ? "" : "s"} in ${bookName(book)}`;

@@ -1,5 +1,6 @@
-export const ROUTE_BASE = "https://www.route.bible";
-export const ROUTE_SRC = "omarchy";
+export const ROUTE_BASE = "https://route.bible";
+export const ROUTE_SRC = "route_bible_omarchy";
+export const ROUTE_UTM_MEDIUM = "omarchy_plugin";
 export const MARGIN_BASE = "https://margin.bible";
 
 function slugFor(canonical: string): string {
@@ -9,10 +10,15 @@ function slugFor(canonical: string): string {
     .replace(/^\/+/, "");
 }
 
+function routeQuery(): string {
+  return `src=${ROUTE_SRC}&utm_source=${ROUTE_SRC}&utm_medium=${ROUTE_UTM_MEDIUM}`;
+}
+
 export function routeUrl(canonical: string): string {
   const slug = slugFor(canonical);
-  if (!slug) return `${ROUTE_BASE}/?src=${ROUTE_SRC}`;
-  return `${ROUTE_BASE}/${encodeURIComponent(slug)}?src=${ROUTE_SRC}`;
+  const query = routeQuery();
+  if (!slug) return `${ROUTE_BASE}/?${query}`;
+  return `${ROUTE_BASE}/${encodeURIComponent(slug)}?${query}`;
 }
 
 export function marginUrl(canonical: string): string {

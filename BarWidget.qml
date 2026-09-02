@@ -1,22 +1,21 @@
 import QtQuick
+import QtQuick.Effects
+import QtQuick.Window
 import Quickshell
 import qs.Commons
 import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "dpshade.route-bible"
+  moduleName: "io.github.dpshde.the-bible"
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item
     ? panelLoader.item.popoutSwitchClosing === true
     : false
-  readonly property string compactLabel: panelLoader.item && panelLoader.item.compactLabel
-    ? panelLoader.item.compactLabel
-    : "Jn 3:16"
   readonly property string tooltipLabel: panelLoader.item && panelLoader.item.tooltipLabel
     ? panelLoader.item.tooltipLabel + "\nClick to open · scroll chapter · middle-click route.bible"
-    : "route.bible"
+    : "The Bible"
 
   function open() {
     if (panelLoader.item) panelLoader.item.open()
@@ -64,7 +63,8 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.vertical ? "" : ("󰂻  " + root.compactLabel)
+    text: "󰂼"
+    labelVisible: false
     tooltipText: root.tooltipLabel
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.MiddleButton) {
@@ -78,23 +78,25 @@ BarWidget {
       panelLoader.item.stepChapter(delta > 0 ? -1 : 1)
     }
 
-    Column {
-      visible: root.vertical
-      anchors.fill: parent
+    Image {
+      id: bookGlyph
+      anchors.centerIn: parent
+      width: Style.space(16)
+      height: Style.space(16)
+      source: Qt.resolvedUrl("icons/book-open.svg")
+      fillMode: Image.PreserveAspectFit
+      visible: false
+      asynchronous: true
+      sourceSize.width: Math.round(width * Screen.devicePixelRatio)
+      sourceSize.height: Math.round(height * Screen.devicePixelRatio)
+    }
 
-      Repeater {
-        model: ["󰂻", root.compactLabel]
-
-        OpticalGlyph {
-          required property string modelData
-          width: button.width
-          height: Style.bar.iconSlot
-          text: modelData
-          fontFamily: button.fontFamily
-          fontSize: modelData.length > 4 ? button.fontSize * 0.85 : button.fontSize
-          color: button.foreground
-        }
-      }
+    MultiEffect {
+      anchors.fill: bookGlyph
+      source: bookGlyph
+      colorization: 1
+      colorizationColor: button.foreground
+      opacity: bookGlyph.status === Image.Ready ? 1 : 0
     }
   }
 }

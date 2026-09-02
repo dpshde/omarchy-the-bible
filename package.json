@@ -1,13 +1,13 @@
 {
-  "name": "omarchy-route-bible",
+  "name": "omarchy-the-bible",
   "version": "1.0.0",
   "private": true,
-  "description": "Omarchy plugin for parsing a passage, selecting verses, and opening route.bible.",
+  "description": "The Bible: read the Berean Standard Bible from the Omarchy bar and open passages on route.bible.",
   "type": "module",
   "packageManager": "pnpm@10.28.2",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dpshde/omarchy-route-bible.git"
+    "url": "git+https://github.com/dpshde/omarchy-the-bible.git"
   },
   "scripts": {
     "build": "node scripts/bundle-grab-bcv.mjs && node scripts/bundle-bible.mjs && node scripts/bundle-route.mjs",
