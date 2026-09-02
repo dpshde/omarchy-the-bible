@@ -1173,13 +1173,14 @@ Item {
                   id: numLabel
                   visible: run.showNum
                   text: String(run.n)
-                  color: blockDelegate.selected ? root.selectedTextColor : root.muted
-                  opacity: blockDelegate.selected ? 0.8 : 0.55
+                  color: root.muted
+                  opacity: 0.4
                   font.family: root.fontFamily
-                  font.pixelSize: Math.max(1, Style.font.caption)
+                  font.pixelSize: Math.max(8, Math.round(Style.font.bodySmall * 0.7))
+                  font.weight: Font.Normal
                   anchors.left: parent.left
                   anchors.top: parent.top
-                  anchors.topMargin: Math.max(0, (Style.font.bodySmall - font.pixelSize) * 0.35)
+                  anchors.topMargin: Math.max(0, Math.round(Style.font.bodySmall * 0.2))
                 }
 
                 Text {
