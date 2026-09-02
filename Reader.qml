@@ -1164,14 +1164,32 @@ Item {
                 required property var modelData
                 required property int index
                 readonly property int n: Math.floor(Number(modelData.n) || 0)
-                width: Math.min(runText.implicitWidth, flow.width)
-                height: runText.implicitHeight
+                readonly property bool showNum: !!modelData.showNum
+                readonly property int numGap: showNum ? Style.space(4) : 0
+                width: Math.min(numLabel.implicitWidth + numGap + runText.implicitWidth, flow.width)
+                height: Math.max(numLabel.visible ? numLabel.implicitHeight : 0, runText.implicitHeight)
+
+                Text {
+                  id: numLabel
+                  visible: run.showNum
+                  text: String(run.n)
+                  color: blockDelegate.selected ? root.selectedTextColor : root.muted
+                  opacity: blockDelegate.selected ? 0.8 : 0.55
+                  font.family: root.fontFamily
+                  font.pixelSize: Math.max(1, Style.font.caption)
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.topMargin: Math.max(0, (Style.font.bodySmall - font.pixelSize) * 0.35)
+                }
 
                 Text {
                   id: runText
-                  width: parent.width
+                  anchors.left: run.showNum ? numLabel.right : parent.left
+                  anchors.leftMargin: run.numGap
+                  anchors.right: parent.right
+                  anchors.top: parent.top
                   wrapMode: Text.WordWrap
-                  text: (run.modelData.showNum ? (run.n + " ") : "") + String(run.modelData.t || "")
+                  text: String(run.modelData.t || "")
                   color: blockDelegate.selected
                     ? root.selectedTextColor
                     : (blockDelegate.hovered || run.modelData.wj ? root.accent : root.foreground)
