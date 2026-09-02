@@ -14,6 +14,8 @@ await bundlePragmaLibrary({
     "defaultChapter",
     "defaultVerse",
     "chapterKey",
+    "normalizeIndex",
+    "normalizeVerse",
     "versesFor",
     "lastVerseNumber",
     "clampVerse",

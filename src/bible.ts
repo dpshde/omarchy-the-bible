@@ -84,7 +84,16 @@ export const BOOK_ABBREV: Record<string, string> = {
   REV: "Rev"
 };
 
-export type VerseRow = { n: number; t: string; h?: string; s?: string; r?: string };
+export type VerseRow = {
+  n: number;
+  t: string;
+  heading?: string;
+  subhead?: string;
+  refs?: string;
+  h?: string;
+  s?: string;
+  r?: string;
+};
 export type BibleIndex = Record<string, VerseRow[]>;
 export type Place = { book: string; chapter: number };
 export type Selection = {
@@ -96,6 +105,29 @@ export type Selection = {
 
 export function chapterKey(book: string, chapter: number): string {
   return `${book}.${chapter}`;
+}
+
+export function normalizeVerse(row: Partial<VerseRow> & { n?: number; t?: string }): VerseRow {
+  const heading = String(row.heading || row.h || "");
+  const subhead = String(row.subhead || row.s || "");
+  const refs = String(row.refs || row.r || "");
+  return {
+    n: Math.floor(Number(row.n) || 0),
+    t: String(row.t || ""),
+    heading,
+    subhead,
+    refs
+  };
+}
+
+export function normalizeIndex(bible: BibleIndex | Record<string, Array<Partial<VerseRow>>> | null | undefined): BibleIndex {
+  const out: BibleIndex = {};
+  if (!bible) return out;
+  for (const [key, rows] of Object.entries(bible)) {
+    if (!Array.isArray(rows)) continue;
+    out[key] = rows.map((row) => normalizeVerse(row));
+  }
+  return out;
 }
 
 export function versesFor(bible: BibleIndex | null | undefined, book: string, chapter: number): VerseRow[] {
@@ -235,9 +267,9 @@ export function selectedText(bible: BibleIndex | null | undefined, selection: Se
     .filter((row) => row.n >= start && row.n <= end)
     .map((row) => {
       const parts: string[] = [];
-      if (row.h) parts.push(row.h);
-      if (row.s) parts.push(row.s);
-      if (row.r) parts.push(`(${row.r})`);
+      if (row.heading) parts.push(row.heading);
+      if (row.subhead) parts.push(row.subhead);
+      if (row.refs) parts.push(`(${row.refs})`);
       parts.push(`${row.n} ${row.t}`);
       return parts.join("\n");
     })

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatCompact,
   nextChapter,
+  normalizeIndex,
   parseState,
   prevChapter,
   selectedText,
@@ -89,12 +90,12 @@ describe("selectedText", () => {
   });
 
   it("includes section headers on the first selected verse", () => {
-    const headed = {
+    const headed = normalizeIndex({
       "JHN.1": [
         { n: 1, t: "In the beginning was the Word.", h: "The Beginning", r: "Genesis 1:1–2" },
         { n: 2, t: "He was with God in the beginning." }
       ]
-    };
+    });
     const text = selectedText(headed, { book: "JHN", chapter: 1, startVerse: 1, endVerse: 2 });
     expect(text).toContain("The Beginning");
     expect(text).toContain("(Genesis 1:1–2)");

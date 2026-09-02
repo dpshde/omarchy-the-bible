@@ -69,6 +69,8 @@ var BibleApi = (function() {
     lastVerseNumber: () => lastVerseNumber,
     nextBook: () => nextBook,
     nextChapter: () => nextChapter,
+    normalizeIndex: () => normalizeIndex,
+    normalizeVerse: () => normalizeVerse,
     orderedRange: () => orderedRange,
     parseState: () => parseState,
     prevBook: () => prevBook,
@@ -162,6 +164,27 @@ var BibleApi = (function() {
   };
   function chapterKey(book, chapter) {
     return `${book}.${chapter}`;
+  }
+  function normalizeVerse(row) {
+    const heading = String(row.heading || row.h || "");
+    const subhead = String(row.subhead || row.s || "");
+    const refs = String(row.refs || row.r || "");
+    return {
+      n: Math.floor(Number(row.n) || 0),
+      t: String(row.t || ""),
+      heading,
+      subhead,
+      refs
+    };
+  }
+  function normalizeIndex(bible) {
+    const out = {};
+    if (!bible) return out;
+    for (const [key, rows] of Object.entries(bible)) {
+      if (!Array.isArray(rows)) continue;
+      out[key] = rows.map((row) => normalizeVerse(row));
+    }
+    return out;
   }
   function versesFor(bible, book, chapter) {
     if (!bible) return [];
@@ -282,9 +305,9 @@ var BibleApi = (function() {
     const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
     return rows.filter((row) => row.n >= start && row.n <= end).map((row) => {
       const parts = [];
-      if (row.h) parts.push(row.h);
-      if (row.s) parts.push(row.s);
-      if (row.r) parts.push(`(${row.r})`);
+      if (row.heading) parts.push(row.heading);
+      if (row.subhead) parts.push(row.subhead);
+      if (row.refs) parts.push(`(${row.refs})`);
       parts.push(`${row.n} ${row.t}`);
       return parts.join("\n");
     }).join("\n");
@@ -331,6 +354,8 @@ function defaultBook() { return BibleApi.defaultBook.apply(null, arguments); }
 function defaultChapter() { return BibleApi.defaultChapter.apply(null, arguments); }
 function defaultVerse() { return BibleApi.defaultVerse.apply(null, arguments); }
 function chapterKey() { return BibleApi.chapterKey.apply(null, arguments); }
+function normalizeIndex() { return BibleApi.normalizeIndex.apply(null, arguments); }
+function normalizeVerse() { return BibleApi.normalizeVerse.apply(null, arguments); }
 function versesFor() { return BibleApi.versesFor.apply(null, arguments); }
 function lastVerseNumber() { return BibleApi.lastVerseNumber.apply(null, arguments); }
 function clampVerse() { return BibleApi.clampVerse.apply(null, arguments); }

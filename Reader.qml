@@ -740,10 +740,12 @@ Item {
     id: bibleFile
     path: root.fileUrlToPath(Qt.resolvedUrl("data/bsb.json"))
     printErrors: false
+    watchChanges: true
     onLoaded: {
-      try { root.bible = JSON.parse(text()) } catch (e) { root.bible = null }
+      try { root.bible = Bible.normalizeIndex(JSON.parse(text())) } catch (e) { root.bible = null }
       stateFile.reload()
     }
+    onFileChanged: reload()
   }
 
   FileView {
@@ -977,14 +979,20 @@ Item {
         model: root.verses
 
         delegate: Item {
+          id: verseDelegate
           required property var modelData
           width: ListView.view ? ListView.view.width : 1
           height: verseCol.implicitHeight
 
+          readonly property int verseNum: Number(modelData.n)
+          readonly property string verseText: String(modelData.t || "")
+          readonly property string heading: String(modelData.heading || "")
+          readonly property string subhead: String(modelData.subhead || "")
+          readonly property string refs: String(modelData.refs || "")
           readonly property bool selected: root.startVerse >= 1 && root.endVerse >= 1
-            && modelData.n >= Math.min(root.startVerse, root.endVerse)
-            && modelData.n <= Math.max(root.startVerse, root.endVerse)
-          readonly property bool hovered: !root.searchActive && modelData.n === root.focusVerse
+            && verseNum >= Math.min(root.startVerse, root.endVerse)
+            && verseNum <= Math.max(root.startVerse, root.endVerse)
+          readonly property bool hovered: !root.searchActive && verseNum === root.focusVerse
           readonly property color copyColor: selected ? root.selectedTextColor : (hovered ? root.accent : root.foreground)
 
           Rectangle {
@@ -1009,16 +1017,16 @@ Item {
             id: verseCol
             width: parent.width
             spacing: Style.space(2)
-            topPadding: modelData.h && modelData.n > 1 ? Style.space(14) : Style.space(2)
+            topPadding: verseDelegate.heading !== "" && verseDelegate.verseNum > 1 ? Style.space(14) : Style.space(2)
             leftPadding: Style.space(4)
             rightPadding: Style.space(4)
             bottomPadding: Style.space(4)
 
             Text {
-              visible: !!modelData.h
+              visible: verseDelegate.heading !== ""
               width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: modelData.h || ""
-              color: parent.parent.copyColor
+              text: verseDelegate.heading
+              color: verseDelegate.copyColor
               font.family: root.fontFamily
               font.pixelSize: Style.font.subtitle
               font.weight: Font.DemiBold
@@ -1026,10 +1034,10 @@ Item {
             }
 
             Text {
-              visible: !!modelData.s
+              visible: verseDelegate.subhead !== ""
               width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: modelData.s || ""
-              color: parent.parent.selected ? root.selectedTextColor : (parent.parent.hovered ? root.accent : root.muted)
+              text: verseDelegate.subhead
+              color: verseDelegate.selected ? root.selectedTextColor : (verseDelegate.hovered ? root.accent : root.muted)
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               font.weight: Font.DemiBold
@@ -1037,10 +1045,10 @@ Item {
             }
 
             Text {
-              visible: !!modelData.r
+              visible: verseDelegate.refs !== ""
               width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: modelData.r ? ("(" + modelData.r + ")") : ""
-              color: parent.parent.selected ? root.selectedTextColor : root.muted
+              text: verseDelegate.refs !== "" ? ("(" + verseDelegate.refs + ")") : ""
+              color: verseDelegate.selected ? root.selectedTextColor : root.muted
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.italic: true
@@ -1049,11 +1057,11 @@ Item {
 
             Text {
               width: parent.width - verseCol.leftPadding - verseCol.rightPadding
-              text: modelData.n + "  " + modelData.t
-              color: parent.parent.copyColor
+              text: verseDelegate.verseNum + "  " + verseDelegate.verseText
+              color: verseDelegate.copyColor
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
-              font.bold: parent.parent.hovered
+              font.bold: verseDelegate.hovered
               wrapMode: Text.WordWrap
             }
           }
