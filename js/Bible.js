@@ -196,10 +196,36 @@ var BibleApi = (function() {
     const rows = bible[chapterKey(book, chapter)];
     return Array.isArray(rows) ? rows : [];
   }
+  var FLOW_KINDS = /* @__PURE__ */ new Set(["para", "q1", "q2", "li", "d"]);
+  function lastVerse(block) {
+    var _a;
+    const parts = block.parts || [];
+    if (!parts.length) return 0;
+    return Math.floor(Number((_a = parts[parts.length - 1]) == null ? void 0 : _a.n) || 0);
+  }
+  function firstVerse(block) {
+    var _a;
+    const parts = block.parts || [];
+    if (!parts.length) return 0;
+    return Math.floor(Number((_a = parts[0]) == null ? void 0 : _a.n) || 0);
+  }
   function pubBlocks(pub, book, chapter) {
     if (!pub) return [];
     const rows = pub[chapterKey(book, chapter)];
-    return Array.isArray(rows) ? rows : [];
+    if (!Array.isArray(rows)) return [];
+    const out = rows.map((row) => __spreadProps(__spreadValues({}, row), { join: false, joinNext: false }));
+    for (let i = 1; i < out.length; i++) {
+      const prev = out[i - 1];
+      const cur = out[i];
+      if (!FLOW_KINDS.has(prev.kind) || !FLOW_KINDS.has(cur.kind)) continue;
+      const a = lastVerse(prev);
+      const b = firstVerse(cur);
+      if (a >= 1 && a === b) {
+        cur.join = true;
+        prev.joinNext = true;
+      }
+    }
+    return out;
   }
   function readerBlocks(bible, book, chapter) {
     const rows = versesFor(bible, book, chapter).map((row) => normalizeVerse(row));

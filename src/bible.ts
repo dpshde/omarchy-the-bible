@@ -157,7 +157,23 @@ export type PubBlock = {
   indent: number;
   text: string;
   parts: PubPart[];
+  join?: boolean;
+  joinNext?: boolean;
 };
+
+const FLOW_KINDS = new Set(["para", "q1", "q2", "li", "d"]);
+
+function lastVerse(block: PubBlock): number {
+  const parts = block.parts || [];
+  if (!parts.length) return 0;
+  return Math.floor(Number(parts[parts.length - 1]?.n) || 0);
+}
+
+function firstVerse(block: PubBlock): number {
+  const parts = block.parts || [];
+  if (!parts.length) return 0;
+  return Math.floor(Number(parts[0]?.n) || 0);
+}
 
 export function pubBlocks(
   pub: Record<string, PubBlock[]> | null | undefined,
@@ -166,7 +182,20 @@ export function pubBlocks(
 ): PubBlock[] {
   if (!pub) return [];
   const rows = pub[chapterKey(book, chapter)];
-  return Array.isArray(rows) ? rows : [];
+  if (!Array.isArray(rows)) return [];
+  const out = rows.map((row) => ({ ...row, join: false, joinNext: false }));
+  for (let i = 1; i < out.length; i++) {
+    const prev = out[i - 1];
+    const cur = out[i];
+    if (!FLOW_KINDS.has(prev.kind) || !FLOW_KINDS.has(cur.kind)) continue;
+    const a = lastVerse(prev);
+    const b = firstVerse(cur);
+    if (a >= 1 && a === b) {
+      cur.join = true;
+      prev.joinNext = true;
+    }
+  }
+  return out;
 }
 
 export function readerBlocks(bible: BibleIndex | null | undefined, book: string, chapter: number): ReaderBlock[] {

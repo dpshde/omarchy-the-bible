@@ -1048,7 +1048,7 @@ Item {
         anchors.fill: parent
         clip: true
         visible: root.mode === "read"
-        spacing: Style.space(2)
+        spacing: root.usePublication ? 0 : Style.space(2)
         boundsBehavior: Flickable.StopAtBounds
         interactive: !root.dragging
         keyNavigationEnabled: false
@@ -1069,6 +1069,8 @@ Item {
           readonly property bool isFlow: kind === "para" || kind === "q1" || kind === "q2" || kind === "li" || kind === "d"
           readonly property int verseNum: Number(modelData.n)
           readonly property int indent: Number(modelData.indent || 0)
+          readonly property bool join: !!modelData.join
+          readonly property bool joinNext: !!modelData.joinNext
           readonly property var parts: modelData.parts || []
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
@@ -1096,18 +1098,20 @@ Item {
             return false
           }
           readonly property int topPad: {
+            if (join) return 0
             if (kind === "heading" && modelData.spaced) return Style.space(16)
             if (kind === "subhead" && modelData.spaced) return Style.space(10)
             if (kind === "d") return Style.space(8)
+            if (kind === "para") return Style.space(6)
             if (isVerse) return Style.space(3)
             return Style.space(1)
           }
-          readonly property int bottomPad: isVerse || isFlow ? Style.space(3) : Style.space(1)
+          readonly property int bottomPad: joinNext ? 0 : (isVerse ? Style.space(3) : 0)
 
           Rectangle {
             visible: blockDelegate.isVerse || blockDelegate.isFlow
             anchors.fill: parent
-            radius: Style.cornerRadius
+            radius: isFlow && (join || joinNext) ? 0 : Style.cornerRadius
             color: blockDelegate.selected
               ? root.selectionFill
               : (blockDelegate.hovered ? root.hoverFill : "transparent")
@@ -1155,7 +1159,7 @@ Item {
             anchors.leftMargin: Style.space(4) + Style.space(14) * blockDelegate.indent
             anchors.rightMargin: Style.space(4)
             anchors.topMargin: blockDelegate.topPad
-            spacing: Style.space(4)
+            spacing: 0
 
             Repeater {
               model: blockDelegate.parts

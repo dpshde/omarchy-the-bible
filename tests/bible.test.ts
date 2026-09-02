@@ -5,6 +5,7 @@ import {
   normalizeIndex,
   parseState,
   prevChapter,
+  pubBlocks,
   readerBlocks,
   selectedText,
   serializeState,
@@ -133,5 +134,22 @@ describe("readerBlocks", () => {
       { kind: "verse", text: "", n: 1, t: "In the beginning was the Word.", spaced: false },
       { kind: "verse", text: "", n: 2, t: "He was with God in the beginning.", spaced: false }
     ]);
+  });
+});
+
+describe("pubBlocks", () => {
+  it("joins consecutive poetry lines of the same verse", () => {
+    const pub = {
+      "PSA.23": [
+        { kind: "q1", spaced: false, indent: 1, text: "The LORD is my shepherd;", parts: [{ n: 1, t: "The LORD is my shepherd;", wj: false, showNum: true }] },
+        { kind: "q2", spaced: false, indent: 2, text: "I shall not want.", parts: [{ n: 1, t: "I shall not want.", wj: false, showNum: false }] },
+        { kind: "q1", spaced: false, indent: 1, text: "He makes me lie down", parts: [{ n: 2, t: "He makes me lie down", wj: false, showNum: true }] }
+      ]
+    };
+    const rows = pubBlocks(pub, "PSA", 23);
+    expect(rows[0].joinNext).toBe(true);
+    expect(rows[1].join).toBe(true);
+    expect(rows[1].joinNext).toBe(false);
+    expect(rows[2].join).toBe(false);
   });
 });
