@@ -1073,10 +1073,28 @@ Item {
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
-          readonly property bool selected: isVerse && root.startVerse >= 1 && root.endVerse >= 1
-            && verseNum >= Math.min(root.startVerse, root.endVerse)
-            && verseNum <= Math.max(root.startVerse, root.endVerse)
-          readonly property bool hovered: isVerse && !root.searchActive && verseNum === root.focusVerse
+          readonly property bool selected: {
+            if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
+            if (isVerse)
+              return verseNum >= Math.min(root.startVerse, root.endVerse)
+                && verseNum <= Math.max(root.startVerse, root.endVerse)
+            if (!isFlow) return false
+            for (var i = 0; i < parts.length; i++) {
+              var n = Number(parts[i].n)
+              if (n >= Math.min(root.startVerse, root.endVerse) && n <= Math.max(root.startVerse, root.endVerse))
+                return true
+            }
+            return false
+          }
+          readonly property bool hovered: {
+            if (root.searchActive || selected) return false
+            if (isVerse) return verseNum === root.focusVerse
+            if (!isFlow) return false
+            for (var i = 0; i < parts.length; i++) {
+              if (Number(parts[i].n) === root.focusVerse) return true
+            }
+            return false
+          }
           readonly property int topPad: {
             if (kind === "heading" && modelData.spaced) return Style.space(16)
             if (kind === "subhead" && modelData.spaced) return Style.space(10)
@@ -1087,7 +1105,7 @@ Item {
           readonly property int bottomPad: isVerse || isFlow ? Style.space(3) : Style.space(1)
 
           Rectangle {
-            visible: blockDelegate.isVerse
+            visible: blockDelegate.isVerse || blockDelegate.isFlow
             anchors.fill: parent
             radius: Style.cornerRadius
             color: blockDelegate.selected
@@ -1146,28 +1164,17 @@ Item {
                 required property var modelData
                 required property int index
                 readonly property int n: Math.floor(Number(modelData.n) || 0)
-                readonly property bool selected: root.startVerse >= 1 && root.endVerse >= 1
-                  && n >= Math.min(root.startVerse, root.endVerse)
-                  && n <= Math.max(root.startVerse, root.endVerse)
-                readonly property bool hovered: !root.searchActive && n === root.focusVerse && !selected
                 width: Math.min(runText.implicitWidth, flow.width)
                 height: runText.implicitHeight
-
-                Rectangle {
-                  anchors.fill: parent
-                  radius: Style.cornerRadius
-                  visible: run.selected || run.hovered
-                  color: run.selected ? root.selectionFill : root.hoverFill
-                }
 
                 Text {
                   id: runText
                   width: parent.width
                   wrapMode: Text.WordWrap
                   text: (run.modelData.showNum ? (run.n + " ") : "") + String(run.modelData.t || "")
-                  color: run.selected
+                  color: blockDelegate.selected
                     ? root.selectedTextColor
-                    : (run.hovered || run.modelData.wj ? root.accent : root.foreground)
+                    : (blockDelegate.hovered || run.modelData.wj ? root.accent : root.foreground)
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
                   font.italic: blockDelegate.kind === "d"
