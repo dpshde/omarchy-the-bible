@@ -960,6 +960,14 @@ Item {
         spacing: Style.space(6)
 
         IconButton {
+          id: copyBtn
+          iconSource: Qt.resolvedUrl("icons/copy.svg")
+          foreground: root.foreground
+          tooltipText: "Copy text and URL"
+          onClicked: root.copyText()
+        }
+
+        IconButton {
           id: pubBtn
           visible: root.expanded
           iconSource: Qt.resolvedUrl("icons/publication.svg")
@@ -988,14 +996,6 @@ Item {
           foreground: root.foreground
           tooltipText: "Expand overlay"
           onClicked: root.requestExpand()
-        }
-
-        IconButton {
-          id: copyBtn
-          iconSource: Qt.resolvedUrl("icons/copy.svg")
-          foreground: root.foreground
-          tooltipText: "Copy text and URL"
-          onClicked: root.copyText()
         }
 
         Button {
