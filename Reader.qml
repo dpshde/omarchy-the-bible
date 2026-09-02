@@ -152,52 +152,7 @@ Item {
     root.persist()
   }
 
-  function escapeHtml(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-  }
 
-  function colorHtml(c) {
-    var s = String(c || "")
-    if (s.length === 9 && s.charAt(0) === "#") return "#" + s.slice(3)
-    return s
-  }
-
-  function pubHtml(parts, focusVerse, startVerse, endVerse) {
-    var html = "<style type=\"text/css\">a { text-decoration: none; }</style>"
-    var list = parts || []
-    var selStart = Math.min(Number(startVerse) || 0, Number(endVerse) || 0)
-    var selEnd = Math.max(Number(startVerse) || 0, Number(endVerse) || 0)
-    for (var i = 0; i < list.length; i++) {
-      var part = list[i]
-      var n = Math.floor(Number(part.n) || 0)
-      var selected = selStart >= 1 && n >= selStart && n <= selEnd
-      var hovered = !root.searchActive && n === Number(focusVerse) && !selected
-      var fg = selected
-        ? root.selectedTextColor
-        : (hovered || part.wj ? root.accent : root.foreground)
-      var bg = selected ? root.selectionFill : (hovered ? root.hoverFill : "")
-      var body = root.escapeHtml(part.t)
-      var num = part.showNum
-        ? "<font color=\"" + root.colorHtml(selected || hovered ? fg : root.muted) + "\">" + n + "</font> "
-        : ""
-      var style = "text-decoration:none; color:" + root.colorHtml(fg) + ";"
-      if (bg) style += " background-color:" + root.colorHtml(bg) + ";"
-      html += "<a href=\"v:" + n + "\" style=\"" + style + "\">" + num + body + "</a>"
-      if (i < list.length - 1) html += " "
-    }
-    return html
-  }
-
-  function linkVerse(link) {
-    var raw = String(link || "")
-    if (raw.indexOf("v:") !== 0) return 0
-    var n = Math.floor(Number(raw.slice(2)) || 0)
-    return n >= 1 ? n : 0
-  }
 
   function applyPlace(book, chapter, startVerse, endVerse, persistNow) {
     if (!book || GrabBcv.chapterCount(book) < 1) return false
@@ -1105,7 +1060,9 @@ Item {
           id: blockDelegate
           required property var modelData
           width: ListView.view ? ListView.view.width : 1
-          height: (kind === "blank" ? Style.space(10) : blockText.implicitHeight) + topPad + bottomPad
+          height: (kind === "blank"
+            ? Style.space(10)
+            : (isFlow ? flow.implicitHeight : blockText.implicitHeight)) + topPad + bottomPad
 
           readonly property string kind: String(modelData.kind || "verse")
           readonly property bool isVerse: kind === "verse"
@@ -1153,15 +1110,11 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.leftMargin: Style.space(4) + Style.space(14) * blockDelegate.indent
+            anchors.leftMargin: Style.space(4)
             anchors.rightMargin: Style.space(4)
             anchors.topMargin: blockDelegate.topPad
-            visible: blockDelegate.kind !== "blank"
-            text: blockDelegate.isFlow
-              ? root.pubHtml(blockDelegate.parts, root.focusVerse, root.startVerse, root.endVerse)
-              : blockDelegate.blockLabel
-            textFormat: blockDelegate.isFlow ? Text.RichText : Text.PlainText
-            linkColor: root.foreground
+            visible: !blockDelegate.isFlow && blockDelegate.kind !== "blank"
+            text: blockDelegate.blockLabel
             color: blockDelegate.isVerse
               ? (blockDelegate.selected ? root.selectedTextColor : (blockDelegate.hovered ? root.accent : root.foreground))
               : (blockDelegate.kind === "refs" || blockDelegate.kind === "d" ? root.muted : root.foreground)
@@ -1173,15 +1126,67 @@ Item {
             font.italic: blockDelegate.kind === "refs" || blockDelegate.kind === "d"
             font.bold: blockDelegate.hovered && blockDelegate.isVerse
             wrapMode: Text.WordWrap
-            onLinkActivated: function(link) {
-              var n = root.linkVerse(link)
-              if (!n) return
-              if (root.shiftHeld) root.selectRange(root.anchorVerse, n)
-              else root.selectVerse(n)
-            }
-            onHoveredLinkChanged: {
-              var n = root.linkVerse(hoveredLink)
-              if (n) root.focusVerse = n
+          }
+
+          Flow {
+            id: flow
+            visible: blockDelegate.isFlow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: Style.space(4) + Style.space(14) * blockDelegate.indent
+            anchors.rightMargin: Style.space(4)
+            anchors.topMargin: blockDelegate.topPad
+            spacing: Style.space(4)
+
+            Repeater {
+              model: blockDelegate.parts
+              delegate: Item {
+                id: run
+                required property var modelData
+                required property int index
+                readonly property int n: Math.floor(Number(modelData.n) || 0)
+                readonly property bool selected: root.startVerse >= 1 && root.endVerse >= 1
+                  && n >= Math.min(root.startVerse, root.endVerse)
+                  && n <= Math.max(root.startVerse, root.endVerse)
+                readonly property bool hovered: !root.searchActive && n === root.focusVerse && !selected
+                width: Math.min(runText.implicitWidth, flow.width)
+                height: runText.implicitHeight
+
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  visible: run.selected || run.hovered
+                  color: run.selected ? root.selectionFill : root.hoverFill
+                }
+
+                Text {
+                  id: runText
+                  width: parent.width
+                  wrapMode: Text.WordWrap
+                  text: (run.modelData.showNum ? (run.n + " ") : "") + String(run.modelData.t || "")
+                  color: run.selected
+                    ? root.selectedTextColor
+                    : (run.hovered || run.modelData.wj ? root.accent : root.foreground)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.italic: blockDelegate.kind === "d"
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.IBeamCursor
+                  onEntered: {
+                    if (!root.searchActive) root.focusVerse = run.n
+                  }
+                  onClicked: function(mouse) {
+                    root.requestVerseFocus()
+                    if (mouse.modifiers & Qt.ShiftModifier) root.selectRange(root.anchorVerse, run.n)
+                    else root.selectVerse(run.n)
+                  }
+                }
+              }
             }
           }
         }
