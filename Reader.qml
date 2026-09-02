@@ -407,6 +407,12 @@ Item {
     root.requestVerseFocus()
   }
 
+  function queueWikiRef(ref) {
+    var raw = String(ref || "").trim()
+    if (!raw) return
+    Qt.callLater(function() { root.followWikiRef(raw) })
+  }
+
   function submitSearch() {
     if (root.acceptTopSuggestion()) return
     var parsed = GrabBcv.tryParse(root.searchText)
@@ -1135,22 +1141,16 @@ Item {
           }
           readonly property int bottomPad: joinNext ? 0 : (isVerse ? Style.space(3) : 0)
 
-          function followRefAt(x, y) {
+          function refAt(x, y) {
             var p = refFlow.mapFromItem(blockDelegate, x, y)
             var kids = refFlow.children
             for (var i = 0; i < kids.length; i++) {
               var child = kids[i]
               if (!child || !child.refText) continue
-              if (p.x >= child.x && p.x <= child.x + child.width) {
-                root.followWikiRef(child.refText)
-                return true
-              }
+              if (p.x >= child.x && p.x <= child.x + child.width) return child.refText
             }
-            if (blockDelegate.refLinks.length === 1) {
-              root.followWikiRef(blockDelegate.refLinks[0])
-              return true
-            }
-            return false
+            if (blockDelegate.refLinks.length === 1) return blockDelegate.refLinks[0]
+            return ""
           }
 
           Rectangle {
@@ -1252,10 +1252,11 @@ Item {
                   id: refHover
                   anchors.fill: parent
                   hoverEnabled: true
+                  acceptedButtons: Qt.LeftButton
                   cursorShape: Qt.PointingHandCursor
                   preventStealing: true
                   z: 4
-                  onClicked: root.followWikiRef(refChip.refText)
+                  onClicked: root.queueWikiRef(refChip.refText)
                 }
               }
             }
@@ -1355,21 +1356,18 @@ Item {
           acceptedButtons: Qt.LeftButton
           hoverEnabled: true
           preventStealing: true
-          propagateComposedEvents: true
           enabled: !root.usePublication
           cursorShape: Qt.IBeamCursor
+          property bool wikiPress: false
           onPressed: function(mouse) {
             var idx = root.verseIndexAt(mouse.y)
             var row = root.readerRows[idx]
             if (row && String(row.kind || "") === "refs") {
-              var item = verseList.itemAtIndex(idx)
-              if (item && item.followRefAt) {
-                var local = item.mapFromItem(verseList, mouse.x, mouse.y)
-                item.followRefAt(local.x, local.y)
-              }
+              wikiPress = true
               mouse.accepted = true
               return
             }
+            wikiPress = false
             root.requestVerseFocus()
             var verse = root.verseAtRow(idx)
             if (!verse) return
@@ -1379,6 +1377,17 @@ Item {
               root.anchorVerse = verse
               root.selectVerse(verse)
             }
+          }
+          onClicked: function(mouse) {
+            if (!wikiPress) return
+            wikiPress = false
+            var idx = root.verseIndexAt(mouse.y)
+            var row = root.readerRows[idx]
+            if (!(row && String(row.kind || "") === "refs")) return
+            var item = verseList.itemAtIndex(idx)
+            if (!item || !item.refAt) return
+            var local = item.mapFromItem(verseList, mouse.x, mouse.y)
+            root.queueWikiRef(item.refAt(local.x, local.y))
           }
           onPositionChanged: function(mouse) {
             var verse = root.verseAtRow(root.verseIndexAt(mouse.y))
