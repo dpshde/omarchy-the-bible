@@ -84,7 +84,7 @@ export const BOOK_ABBREV: Record<string, string> = {
   REV: "Rev"
 };
 
-export type VerseRow = { n: number; t: string };
+export type VerseRow = { n: number; t: string; h?: string; s?: string; r?: string };
 export type BibleIndex = Record<string, VerseRow[]>;
 export type Place = { book: string; chapter: number };
 export type Selection = {
@@ -233,7 +233,14 @@ export function selectedText(bible: BibleIndex | null | undefined, selection: Se
   const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
   return rows
     .filter((row) => row.n >= start && row.n <= end)
-    .map((row) => `${row.n} ${row.t}`)
+    .map((row) => {
+      const parts: string[] = [];
+      if (row.h) parts.push(row.h);
+      if (row.s) parts.push(row.s);
+      if (row.r) parts.push(`(${row.r})`);
+      parts.push(`${row.n} ${row.t}`);
+      return parts.join("\n");
+    })
     .join("\n");
 }
 

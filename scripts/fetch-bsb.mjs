@@ -1,67 +1,116 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { createWriteStream, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { buildSync } from "esbuild";
 import { getVerseCount, resolveBookAlias } from "grab-bcv";
 
-const ARWEAVE_URL = "https://arweave.net/B6yeNb3lk_VkiIp-fTWVh13TlM94LjLK6kC63BPXa8s";
+const USJ_URL = "https://bereanbible.com/bsb_usj.zip";
 const lab = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outPath = join(lab, "data/bsb.json");
+const localUsj = join(lab, "../margin-bible/vendor/scripture/bsb/usj");
 
-const response = await fetch(ARWEAVE_URL, {
-  headers: { "User-Agent": "route-bible-omarchy/1.0" },
-  redirect: "follow"
-});
+const { buildBibleIndex } = await loadUsjModule();
 
-if (!response.ok) {
-  throw new Error(`Failed to fetch BSB JSONL: ${response.status} ${response.statusText}`);
+const books = await loadUsjBooks();
+if (!books.length) {
+  throw new Error("No BSB USJ books found. See https://berean.bible/downloads.htm");
 }
 
-const raw = await response.text();
-const index = {};
-let skipped = 0;
+const index = buildBibleIndex(books);
 let verses = 0;
-
-for (const line of raw.split("\n")) {
-  const trimmed = line.trim();
-  if (!trimmed) continue;
-  let row;
-  try {
-    row = JSON.parse(trimmed);
-  } catch {
-    skipped += 1;
-    continue;
-  }
-
-  const book = resolveBookAlias(String(row.book || ""));
-  const chapter = Number.parseInt(String(row.chapter || ""), 10);
-  const n = Number.parseInt(String(row.verseNum || row.verse || ""), 10);
-  const text = String(row.text || "").trim();
-  if (!book || !Number.isFinite(chapter) || chapter < 1 || !Number.isFinite(n) || n < 1 || !text) {
-    skipped += 1;
-    continue;
-  }
-
-  const key = `${book}.${chapter}`;
-  if (!index[key]) index[key] = [];
-  index[key].push({ n, t: text });
-  verses += 1;
-}
-
-for (const key of Object.keys(index)) {
-  index[key].sort((a, b) => a.n - b.n);
-}
-
+let headings = 0;
 let mismatches = 0;
+
 for (const [key, rows] of Object.entries(index)) {
+  verses += rows.length;
+  headings += rows.filter((row) => row.h || row.s).length;
   const [book, chapterToken] = key.split(".");
   const expected = getVerseCount(book, Number(chapterToken));
-  if (expected && rows.length !== expected) {
-    mismatches += 1;
-  }
+  if (expected && rows.length !== expected) mismatches += 1;
 }
 
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, JSON.stringify(index));
 console.log(
-  `Wrote ${outPath} (${verses} verses, ${Object.keys(index).length} chapters, ${skipped} skipped, ${mismatches} count mismatches)`
+  `Wrote ${outPath} (${verses} verses, ${Object.keys(index).length} chapters, ${headings} headed verses, ${mismatches} count mismatches) from official BSB USJ`
 );
+
+async function loadUsjModule() {
+  const outfile = join(mkdtempSync(join(tmpdir(), "omarchy-usj-")), "usj.mjs");
+  buildSync({
+    entryPoints: [join(lab, "src/usj.ts")],
+    outfile,
+    bundle: true,
+    format: "esm",
+    platform: "node"
+  });
+  return import(pathToFileURL(outfile).href);
+}
+
+async function loadUsjBooks() {
+  try {
+    return await loadFromOfficialZip();
+  } catch (error) {
+    console.warn(`Official USJ zip failed (${error.message}); trying local vendor copy`);
+    return loadFromLocalVendor();
+  }
+}
+
+async function loadFromOfficialZip() {
+  const dir = mkdtempSync(join(tmpdir(), "bsb-usj-"));
+  const zipPath = join(dir, "bsb_usj.zip");
+  const response = await fetch(USJ_URL, {
+    headers: { "User-Agent": "omarchy-the-bible/1.0" },
+    redirect: "follow"
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(zipPath));
+  execFileSync("unzip", ["-qq", "-o", zipPath, "-d", dir]);
+  return readUsjTree(dir);
+}
+
+function loadFromLocalVendor() {
+  try {
+    return readUsjTree(localUsj);
+  } catch {
+    return [];
+  }
+}
+
+function readUsjTree(root) {
+  const books = [];
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(path);
+        continue;
+      }
+      const book = bookCodeFromName(entry.name);
+      if (!book) continue;
+      const raw = entry.name.endsWith(".gz")
+        ? execFileSync("gzip", ["-cd", path], { encoding: "utf8" })
+        : readFileSync(path, "utf8");
+      const doc = JSON.parse(raw);
+      if (!doc || doc.type !== "USJ") continue;
+      books.push({ book, doc });
+    }
+  }
+  return books;
+}
+
+function bookCodeFromName(name) {
+  const stem = String(name || "")
+    .replace(/\.usj(\.gz)?$/i, "")
+    .replace(/^.*[/]/, "");
+  const token = stem.match(/([1-3]?[A-Za-z]{2,3})$/)?.[1] || stem;
+  return resolveBookAlias(token);
+}

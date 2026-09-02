@@ -280,7 +280,14 @@ var BibleApi = (function() {
     if (!hasVerseSelection(selection.startVerse, selection.endVerse)) return "";
     const rows = versesFor(bible, selection.book, selection.chapter);
     const { start, end } = orderedRange(selection.startVerse, selection.endVerse);
-    return rows.filter((row) => row.n >= start && row.n <= end).map((row) => `${row.n} ${row.t}`).join("\n");
+    return rows.filter((row) => row.n >= start && row.n <= end).map((row) => {
+      const parts = [];
+      if (row.h) parts.push(row.h);
+      if (row.s) parts.push(row.s);
+      if (row.r) parts.push(`(${row.r})`);
+      parts.push(`${row.n} ${row.t}`);
+      return parts.join("\n");
+    }).join("\n");
   }
   function serializeState(selection) {
     return JSON.stringify({

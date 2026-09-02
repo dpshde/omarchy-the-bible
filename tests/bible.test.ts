@@ -87,4 +87,18 @@ describe("selectedText", () => {
       selectedText(bible, { book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 })
     ).toBe("");
   });
+
+  it("includes section headers on the first selected verse", () => {
+    const headed = {
+      "JHN.1": [
+        { n: 1, t: "In the beginning was the Word.", h: "The Beginning", r: "Genesis 1:1–2" },
+        { n: 2, t: "He was with God in the beginning." }
+      ]
+    };
+    const text = selectedText(headed, { book: "JHN", chapter: 1, startVerse: 1, endVerse: 2 });
+    expect(text).toContain("The Beginning");
+    expect(text).toContain("(Genesis 1:1–2)");
+    expect(text).toContain("1 In the beginning was the Word.");
+    expect(text).toContain("2 He was with God in the beginning.");
+  });
 });

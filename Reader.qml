@@ -979,12 +979,13 @@ Item {
         delegate: Item {
           required property var modelData
           width: ListView.view ? ListView.view.width : 1
-          height: verseText.implicitHeight
+          height: verseCol.implicitHeight
 
           readonly property bool selected: root.startVerse >= 1 && root.endVerse >= 1
             && modelData.n >= Math.min(root.startVerse, root.endVerse)
             && modelData.n <= Math.max(root.startVerse, root.endVerse)
           readonly property bool hovered: !root.searchActive && modelData.n === root.focusVerse
+          readonly property color copyColor: selected ? root.selectedTextColor : (hovered ? root.accent : root.foreground)
 
           Rectangle {
             anchors.fill: parent
@@ -1004,16 +1005,57 @@ Item {
             color: root.accent
           }
 
-          Text {
-            id: verseText
+          Column {
+            id: verseCol
             width: parent.width
-            text: modelData.n + "  " + modelData.t
-            color: parent.selected ? root.selectedTextColor : (parent.hovered ? root.accent : root.foreground)
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-            font.bold: parent.hovered
-            wrapMode: Text.WordWrap
-            padding: Style.space(4)
+            spacing: Style.space(2)
+            topPadding: modelData.h && modelData.n > 1 ? Style.space(14) : Style.space(2)
+            leftPadding: Style.space(4)
+            rightPadding: Style.space(4)
+            bottomPadding: Style.space(4)
+
+            Text {
+              visible: !!modelData.h
+              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
+              text: modelData.h || ""
+              color: parent.parent.copyColor
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.subtitle
+              font.weight: Font.DemiBold
+              wrapMode: Text.WordWrap
+            }
+
+            Text {
+              visible: !!modelData.s
+              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
+              text: modelData.s || ""
+              color: parent.parent.selected ? root.selectedTextColor : (parent.parent.hovered ? root.accent : root.muted)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.weight: Font.DemiBold
+              wrapMode: Text.WordWrap
+            }
+
+            Text {
+              visible: !!modelData.r
+              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
+              text: modelData.r ? ("(" + modelData.r + ")") : ""
+              color: parent.parent.selected ? root.selectedTextColor : root.muted
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.italic: true
+              wrapMode: Text.WordWrap
+            }
+
+            Text {
+              width: parent.width - verseCol.leftPadding - verseCol.rightPadding
+              text: modelData.n + "  " + modelData.t
+              color: parent.parent.copyColor
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: parent.parent.hovered
+              wrapMode: Text.WordWrap
+            }
           }
         }
 

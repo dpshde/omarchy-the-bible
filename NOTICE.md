@@ -6,9 +6,10 @@ The Holy Bible, Berean Standard Bible, BSB is produced in cooperation with
 Bible Hub, Discovery Bible, OpenBible.com, and the Berean Bible Translation
 Committee. This text of God's Word has been dedicated to the public domain.
 
-Local verse text is fetched at build time from the Arweave transaction:
+Local verse text and section headers come from the official BSB USJ 3.1
+pack listed at https://berean.bible/downloads.htm :
 
-https://arweave.net/B6yeNb3lk_VkiIp-fTWVh13TlM94LjLK6kC63BPXa8s
+https://bereanbible.com/bsb_usj.zip
 
 ## route.bible
 
