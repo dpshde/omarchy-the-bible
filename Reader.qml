@@ -24,6 +24,10 @@ Item {
   property var host: null
   property bool expanded: false
   property bool windowed: false
+  property bool publication: false
+  property bool pubRequested: false
+  property var pub: null
+  property bool shiftHeld: false
   property bool fullscreen: false
 
   property string book: Bible.defaultBook()
@@ -56,6 +60,8 @@ Item {
   readonly property int verseTotal: Bible.lastVerseNumber(root.bible, root.book, root.chapter)
   readonly property var verses: Bible.versesFor(root.bible, root.book, root.chapter)
   readonly property var readerRows: Bible.readerBlocks(root.bible, root.book, root.chapter)
+  readonly property var pubRows: Bible.pubBlocks(root.pub, root.book, root.chapter)
+  readonly property bool usePublication: root.expanded && root.publication && !!root.pub
   readonly property var selection: ({
     book: root.book,
     chapter: root.chapter,
@@ -137,7 +143,51 @@ Item {
   function persist() {
     if (!root.stateReady) return
     root.writingState = true
-    stateFile.setText(Bible.serializeState(root.selection))
+    stateFile.setText(Bible.serializeState(root.selection, { publication: root.publication }))
+  }
+
+  function togglePublication() {
+    if (!root.expanded) return
+    root.publication = !root.publication
+    if (root.publication) root.pubRequested = true
+    if (pubBtn) pubBtn.pulse()
+    root.persist()
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+  }
+
+  function colorHtml(c) {
+    return String(c || "")
+  }
+
+  function pubHtml(parts) {
+    var html = ""
+    var list = parts || []
+    for (var i = 0; i < list.length; i++) {
+      var part = list[i]
+      var n = Math.floor(Number(part.n) || 0)
+      var body = root.escapeHtml(part.t)
+      if (part.wj) body = "<font color=\"" + root.colorHtml(root.accent) + "\">" + body + "</font>"
+      var num = part.showNum
+        ? "<font color=\"" + root.colorHtml(root.muted) + "\">" + n + "</font> "
+        : ""
+      html += "<a href=\"v:" + n + "\"><font color=\"" + root.colorHtml(root.foreground) + "\">" + num + body + "</font></a>"
+      if (i < list.length - 1) html += " "
+    }
+    return html
+  }
+
+  function linkVerse(link) {
+    var raw = String(link || "")
+    if (raw.indexOf("v:") !== 0) return 0
+    var n = Math.floor(Number(raw.slice(2)) || 0)
+    return n >= 1 ? n : 0
   }
 
   function applyPlace(book, chapter, startVerse, endVerse, persistNow) {
@@ -657,12 +707,23 @@ Item {
 
   function scrollToFocus() {
     if (!verseList.count) return
-    var rows = root.readerRows
+    var rows = root.usePublication ? root.pubRows : root.readerRows
     var idx = -1
     for (var i = 0; i < rows.length; i++) {
-      if (rows[i] && rows[i].kind === "verse" && rows[i].n === root.focusVerse) {
+      var row = rows[i]
+      if (!row) continue
+      if (row.kind === "verse" && row.n === root.focusVerse) {
         idx = i
         break
+      }
+      if (row.parts && row.parts.length) {
+        for (var p = 0; p < row.parts.length; p++) {
+          if (row.parts[p] && row.parts[p].n === root.focusVerse) {
+            idx = i
+            break
+          }
+        }
+        if (idx >= 0) break
       }
     }
     if (idx < 0) return
@@ -670,10 +731,18 @@ Item {
   }
 
   function verseAtRow(idx) {
-    var row = root.readerRows[idx]
-    if (!row || row.kind !== "verse") return 0
-    var n = Math.floor(Number(row.n) || 0)
-    return n >= 1 ? n : 0
+    var rows = root.usePublication ? root.pubRows : root.readerRows
+    var row = rows[idx]
+    if (!row) return 0
+    if (row.kind === "verse") {
+      var n = Math.floor(Number(row.n) || 0)
+      return n >= 1 ? n : 0
+    }
+    if (row.parts && row.parts.length) {
+      var partN = Math.floor(Number(row.parts[0].n) || 0)
+      return partN >= 1 ? partN : 0
+    }
+    return 0
   }
 
   function verseIndexAt(mouseY) {
@@ -732,6 +801,10 @@ Item {
     if (t === "o" || t === "O") { root.routeNow(); return }
     if (t === "m" || t === "M") { root.outlineNow(); return }
     if (t === "y" || t === "Y") { if (copyBtn) copyBtn.pulse(); root.copyUrl(); return }
+    if ((t === "p" || t === "P") && root.expanded) {
+      root.togglePublication()
+      return
+    }
     if (t === "f" || t === "F") {
       if (root.expanded) {
         if (popoutBtn && root.windowed) popoutBtn.pulse()
@@ -764,6 +837,17 @@ Item {
   }
 
   FileView {
+    id: pubFile
+    path: root.pubRequested ? root.fileUrlToPath(Qt.resolvedUrl("data/pub.json")) : ""
+    printErrors: false
+    watchChanges: true
+    onLoaded: {
+      try { root.pub = JSON.parse(text()) } catch (e) { root.pub = null }
+    }
+    onFileChanged: reload()
+  }
+
+  FileView {
     id: stateFile
     path: Quickshell.env("HOME") + "/.local/state/omarchy/settings/route-bible.json"
     watchChanges: true
@@ -776,6 +860,10 @@ Item {
         return
       }
       var place = Bible.parseState(text())
+      if (place.publication) {
+        root.publication = true
+        root.pubRequested = true
+      }
       if (root.stateReady
           && place.book === root.book
           && place.chapter === root.chapter
@@ -814,6 +902,15 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(6)
+
+        IconButton {
+          id: pubBtn
+          visible: root.expanded
+          iconSource: Qt.resolvedUrl("icons/publication.svg")
+          foreground: root.publication ? root.accent : root.foreground
+          tooltipText: root.publication ? "Verse list" : "Publication layout"
+          onClicked: root.togglePublication()
+        }
 
         IconButton {
           id: popoutBtn
@@ -991,34 +1088,56 @@ Item {
         keyNavigationEnabled: false
         activeFocusOnTab: false
         focus: false
-        model: root.readerRows
+        model: root.usePublication ? root.pubRows : root.readerRows
 
         delegate: Item {
           id: blockDelegate
           required property var modelData
           width: ListView.view ? ListView.view.width : 1
-          height: blockText.implicitHeight + topPad + bottomPad
+          height: (kind === "blank" ? Style.space(10) : blockText.implicitHeight) + topPad + bottomPad
 
           readonly property string kind: String(modelData.kind || "verse")
           readonly property bool isVerse: kind === "verse"
+          readonly property bool isFlow: kind === "para" || kind === "q1" || kind === "q2" || kind === "li" || kind === "d"
           readonly property int verseNum: Number(modelData.n)
+          readonly property int indent: Number(modelData.indent || 0)
+          readonly property var parts: modelData.parts || []
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
-          readonly property bool selected: isVerse && root.startVerse >= 1 && root.endVerse >= 1
-            && verseNum >= Math.min(root.startVerse, root.endVerse)
-            && verseNum <= Math.max(root.startVerse, root.endVerse)
-          readonly property bool hovered: isVerse && !root.searchActive && verseNum === root.focusVerse
+          readonly property bool selected: {
+            if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
+            if (isVerse)
+              return verseNum >= Math.min(root.startVerse, root.endVerse)
+                && verseNum <= Math.max(root.startVerse, root.endVerse)
+            if (!isFlow) return false
+            for (var i = 0; i < parts.length; i++) {
+              var n = Number(parts[i].n)
+              if (n >= Math.min(root.startVerse, root.endVerse) && n <= Math.max(root.startVerse, root.endVerse))
+                return true
+            }
+            return false
+          }
+          readonly property bool hovered: {
+            if (root.searchActive) return false
+            if (isVerse) return verseNum === root.focusVerse
+            if (!isFlow) return false
+            for (var i = 0; i < parts.length; i++) {
+              if (Number(parts[i].n) === root.focusVerse) return true
+            }
+            return false
+          }
           readonly property int topPad: {
             if (kind === "heading" && modelData.spaced) return Style.space(16)
             if (kind === "subhead" && modelData.spaced) return Style.space(10)
+            if (kind === "d") return Style.space(8)
             if (isVerse) return Style.space(3)
             return Style.space(1)
           }
-          readonly property int bottomPad: isVerse ? Style.space(3) : Style.space(1)
+          readonly property int bottomPad: isVerse || isFlow ? Style.space(3) : Style.space(1)
 
           Rectangle {
-            visible: blockDelegate.isVerse
+            visible: blockDelegate.isVerse || blockDelegate.isFlow
             anchors.fill: parent
             radius: Style.cornerRadius
             color: blockDelegate.selected
@@ -1027,7 +1146,7 @@ Item {
           }
 
           Rectangle {
-            visible: blockDelegate.hovered
+            visible: blockDelegate.hovered && blockDelegate.isVerse
             width: Math.max(2, Style.space(2))
             anchors.left: parent.left
             anchors.top: parent.top
@@ -1041,21 +1160,33 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.leftMargin: Style.space(4)
+            anchors.leftMargin: Style.space(4) + Style.space(14) * blockDelegate.indent
             anchors.rightMargin: Style.space(4)
             anchors.topMargin: blockDelegate.topPad
-            text: blockDelegate.blockLabel
+            visible: blockDelegate.kind !== "blank"
+            text: blockDelegate.isFlow ? root.pubHtml(blockDelegate.parts) : blockDelegate.blockLabel
+            textFormat: blockDelegate.isFlow ? Text.StyledText : Text.PlainText
             color: blockDelegate.isVerse
               ? (blockDelegate.selected ? root.selectedTextColor : (blockDelegate.hovered ? root.accent : root.foreground))
-              : (blockDelegate.kind === "refs" ? root.muted : root.foreground)
+              : (blockDelegate.kind === "refs" || blockDelegate.kind === "d" ? root.muted : root.foreground)
             font.family: root.fontFamily
             font.pixelSize: blockDelegate.kind === "heading"
               ? Style.font.subtitle
               : (blockDelegate.kind === "refs" ? Style.font.caption : Style.font.bodySmall)
             font.weight: blockDelegate.kind === "heading" || blockDelegate.kind === "subhead" ? Font.DemiBold : Font.Normal
-            font.italic: blockDelegate.kind === "refs"
-            font.bold: blockDelegate.hovered
+            font.italic: blockDelegate.kind === "refs" || blockDelegate.kind === "d"
+            font.bold: blockDelegate.hovered && blockDelegate.isVerse
             wrapMode: Text.WordWrap
+            onLinkActivated: function(link) {
+              var n = root.linkVerse(link)
+              if (!n) return
+              if (root.shiftHeld) root.selectRange(root.anchorVerse, n)
+              else root.selectVerse(n)
+            }
+            onHoveredLinkChanged: {
+              var n = root.linkVerse(hoveredLink)
+              if (n) root.focusVerse = n
+            }
           }
         }
 
@@ -1064,6 +1195,7 @@ Item {
           acceptedButtons: Qt.LeftButton
           hoverEnabled: true
           preventStealing: true
+          enabled: !root.usePublication
           cursorShape: Qt.IBeamCursor
           onPressed: function(mouse) {
             root.requestVerseFocus()

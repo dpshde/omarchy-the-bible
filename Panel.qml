@@ -84,6 +84,7 @@ Panel {
       Keys.priority: Keys.BeforeItem
       Keys.onPressed: function(event) {
         var shift = event.modifiers & Qt.ShiftModifier
+        reader.shiftHeld = !!shift
         var ctrl = event.modifiers & Qt.ControlModifier
         var alt = event.modifiers & Qt.AltModifier
         var meta = event.modifiers & Qt.MetaModifier
@@ -200,6 +201,7 @@ Panel {
         }
       }
       Keys.onReleased: function(event) {
+        if (event.key === Qt.Key_Shift) reader.shiftHeld = false
         if (event.key === Qt.Key_Space) reader.endSpaceHold()
       }
 

@@ -144,6 +144,31 @@ export type ReaderBlock = {
   spaced: boolean;
 };
 
+export type PubPart = {
+  n: number;
+  t: string;
+  wj: boolean;
+  showNum: boolean;
+};
+
+export type PubBlock = {
+  kind: string;
+  spaced: boolean;
+  indent: number;
+  text: string;
+  parts: PubPart[];
+};
+
+export function pubBlocks(
+  pub: Record<string, PubBlock[]> | null | undefined,
+  book: string,
+  chapter: number
+): PubBlock[] {
+  if (!pub) return [];
+  const rows = pub[chapterKey(book, chapter)];
+  return Array.isArray(rows) ? rows : [];
+}
+
 export function readerBlocks(bible: BibleIndex | null | undefined, book: string, chapter: number): ReaderBlock[] {
   const rows = versesFor(bible, book, chapter).map((row) => normalizeVerse(row));
   const blocks: ReaderBlock[] = [];
@@ -303,12 +328,15 @@ export function selectedText(bible: BibleIndex | null | undefined, selection: Se
     .join("\n");
 }
 
-export function serializeState(selection: Selection): string {
+export type ParsedState = Selection & { publication: boolean };
+
+export function serializeState(selection: Selection, extras?: { publication?: boolean }): string {
   return JSON.stringify({
     book: selection.book,
     chapter: selection.chapter,
     startVerse: selection.startVerse,
-    endVerse: selection.endVerse
+    endVerse: selection.endVerse,
+    publication: extras?.publication === true
   });
 }
 
@@ -325,18 +353,20 @@ export function parseState(raw: string, fallback: Selection = {
   chapter: DEFAULT_CHAPTER,
   startVerse: DEFAULT_VERSE,
   endVerse: DEFAULT_VERSE
-}): Selection {
+}): ParsedState {
+  const publicationFallback = false;
   try {
     const parsed = JSON.parse(String(raw || "{}")) as Record<string, unknown>;
     const book = typeof parsed.book === "string" && parsed.book ? parsed.book : fallback.book;
     const chapter = Math.max(1, Math.floor(Number(parsed.chapter) || fallback.chapter));
     const startVerse = parseVerseBound(parsed.startVerse, fallback.startVerse);
     const endVerse = parseVerseBound(parsed.endVerse, startVerse === 0 ? 0 : fallback.endVerse);
+    const publication = parsed.publication === true;
     if (startVerse < 1 || endVerse < 1) {
-      return { book, chapter, startVerse: 0, endVerse: 0 };
+      return { book, chapter, startVerse: 0, endVerse: 0, publication };
     }
-    return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse) };
+    return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse), publication };
   } catch {
-    return { ...fallback };
+    return { ...fallback, publication: publicationFallback };
   }
 }

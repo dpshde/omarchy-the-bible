@@ -11,9 +11,10 @@ import { getVerseCount, resolveBookAlias } from "grab-bcv";
 const USJ_URL = "https://bereanbible.com/bsb_usj.zip";
 const lab = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outPath = join(lab, "data/bsb.json");
+const pubPath = join(lab, "data/pub.json");
 const localUsj = join(lab, "../margin-bible/vendor/scripture/bsb/usj");
 
-const { buildBibleIndex } = await loadUsjModule();
+const { buildBibleIndex, buildPublicationIndex } = await loadUsjModule();
 
 const books = await loadUsjBooks();
 if (!books.length) {
@@ -33,11 +34,14 @@ for (const [key, rows] of Object.entries(index)) {
   if (expected && rows.length !== expected) mismatches += 1;
 }
 
+const pub = buildPublicationIndex(books);
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, JSON.stringify(index));
+writeFileSync(pubPath, JSON.stringify(pub));
 console.log(
   `Wrote ${outPath} (${verses} verses, ${Object.keys(index).length} chapters, ${headings} headed verses, ${mismatches} count mismatches) from official BSB USJ`
 );
+console.log(`Wrote ${pubPath} (${Object.keys(pub).length} chapters)`);
 
 async function loadUsjModule() {
   const outfile = join(mkdtempSync(join(tmpdir(), "omarchy-usj-")), "usj.mjs");

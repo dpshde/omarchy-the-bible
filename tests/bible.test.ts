@@ -7,6 +7,7 @@ import {
   prevChapter,
   readerBlocks,
   selectedText,
+  serializeState,
   toCanonical
 } from "../src/bible";
 
@@ -61,14 +62,27 @@ describe("state", () => {
     const parsed = parseState(
       JSON.stringify({ book: "ROM", chapter: 8, startVerse: 28, endVerse: 30 })
     );
-    expect(parsed).toEqual({ book: "ROM", chapter: 8, startVerse: 28, endVerse: 30 });
+    expect(parsed).toEqual({
+      book: "ROM",
+      chapter: 8,
+      startVerse: 28,
+      endVerse: 30,
+      publication: false
+    });
+  });
+
+  it("round-trips the publication toggle", () => {
+    const parsed = parseState(
+      serializeState({ book: "JHN", chapter: 1, startVerse: 1, endVerse: 1 }, { publication: true })
+    );
+    expect(parsed.publication).toBe(true);
   });
 
   it("round-trips an empty verse selection", () => {
     const parsed = parseState(
       JSON.stringify({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 })
     );
-    expect(parsed).toEqual({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 });
+    expect(parsed).toEqual({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0, publication: false });
   });
 });
 

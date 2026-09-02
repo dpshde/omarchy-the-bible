@@ -17,7 +17,9 @@ function objectFromEntries(entries) {
 }
 var BibleApi = (function() {
   var __defProp = Object.defineProperty;
+  var __defProps = Object.defineProperties;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __getOwnPropSymbols = Object.getOwnPropertySymbols;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
@@ -34,6 +36,7 @@ var BibleApi = (function() {
       }
     return a;
   };
+  var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -75,6 +78,7 @@ var BibleApi = (function() {
     parseState: () => parseState,
     prevBook: () => prevBook,
     prevChapter: () => prevChapter,
+    pubBlocks: () => pubBlocks,
     readerBlocks: () => readerBlocks,
     selectedText: () => selectedText,
     serializeState: () => serializeState,
@@ -190,6 +194,11 @@ var BibleApi = (function() {
   function versesFor(bible, book, chapter) {
     if (!bible) return [];
     const rows = bible[chapterKey(book, chapter)];
+    return Array.isArray(rows) ? rows : [];
+  }
+  function pubBlocks(pub, book, chapter) {
+    if (!pub) return [];
+    const rows = pub[chapterKey(book, chapter)];
     return Array.isArray(rows) ? rows : [];
   }
   function readerBlocks(bible, book, chapter) {
@@ -331,12 +340,13 @@ var BibleApi = (function() {
       return parts.join("\n");
     }).join("\n");
   }
-  function serializeState(selection) {
+  function serializeState(selection, extras) {
     return JSON.stringify({
       book: selection.book,
       chapter: selection.chapter,
       startVerse: selection.startVerse,
-      endVerse: selection.endVerse
+      endVerse: selection.endVerse,
+      publication: (extras == null ? void 0 : extras.publication) === true
     });
   }
   function parseVerseBound(value, fallback) {
@@ -352,18 +362,20 @@ var BibleApi = (function() {
     startVerse: DEFAULT_VERSE,
     endVerse: DEFAULT_VERSE
   }) {
+    const publicationFallback = false;
     try {
       const parsed = JSON.parse(String(raw || "{}"));
       const book = typeof parsed.book === "string" && parsed.book ? parsed.book : fallback.book;
       const chapter = Math.max(1, Math.floor(Number(parsed.chapter) || fallback.chapter));
       const startVerse = parseVerseBound(parsed.startVerse, fallback.startVerse);
       const endVerse = parseVerseBound(parsed.endVerse, startVerse === 0 ? 0 : fallback.endVerse);
+      const publication = parsed.publication === true;
       if (startVerse < 1 || endVerse < 1) {
-        return { book, chapter, startVerse: 0, endVerse: 0 };
+        return { book, chapter, startVerse: 0, endVerse: 0, publication };
       }
-      return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse) };
+      return { book, chapter, startVerse, endVerse: Math.max(startVerse, endVerse), publication };
     } catch (e) {
-      return __spreadValues({}, fallback);
+      return __spreadProps(__spreadValues({}, fallback), { publication: publicationFallback });
     }
   }
   return __toCommonJS(bible_exports);
@@ -377,6 +389,7 @@ function normalizeIndex() { return BibleApi.normalizeIndex.apply(null, arguments
 function normalizeVerse() { return BibleApi.normalizeVerse.apply(null, arguments); }
 function versesFor() { return BibleApi.versesFor.apply(null, arguments); }
 function readerBlocks() { return BibleApi.readerBlocks.apply(null, arguments); }
+function pubBlocks() { return BibleApi.pubBlocks.apply(null, arguments); }
 function lastVerseNumber() { return BibleApi.lastVerseNumber.apply(null, arguments); }
 function clampVerse() { return BibleApi.clampVerse.apply(null, arguments); }
 function orderedRange() { return BibleApi.orderedRange.apply(null, arguments); }
