@@ -1146,9 +1146,10 @@ Item {
             font.pixelSize: blockDelegate.kind === "heading"
               ? Style.font.subtitle
               : (blockDelegate.kind === "refs" ? Style.font.caption : Style.font.bodySmall)
-            font.weight: blockDelegate.kind === "heading" || blockDelegate.kind === "subhead" ? Font.DemiBold : Font.Normal
+            font.weight: blockDelegate.kind === "heading" || blockDelegate.kind === "subhead" ? Font.Bold : Font.Normal
             font.italic: blockDelegate.kind === "refs" || blockDelegate.kind === "d"
-            font.bold: blockDelegate.hovered && blockDelegate.isVerse
+            font.bold: (blockDelegate.kind === "heading" || blockDelegate.kind === "subhead")
+              || (blockDelegate.hovered && blockDelegate.isVerse)
             wrapMode: Text.WordWrap
           }
 
