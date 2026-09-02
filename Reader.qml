@@ -1185,8 +1185,8 @@ Item {
                   id: numLabel
                   visible: run.showNum
                   text: String(run.n)
-                  color: root.muted
-                  opacity: 0.4
+                  color: blockDelegate.selected ? root.selectedTextColor : root.muted
+                  opacity: blockDelegate.selected ? 1 : 0.4
                   font.family: root.fontFamily
                   font.pixelSize: Math.max(8, Math.round(Style.font.bodySmall * 0.7))
                   font.weight: Font.Normal
