@@ -61,7 +61,7 @@ Item {
   readonly property var verses: Bible.versesFor(root.bible, root.book, root.chapter)
   readonly property var readerRows: Bible.readerBlocks(root.bible, root.book, root.chapter)
   readonly property var pubRows: Bible.pubBlocks(root.pub, root.book, root.chapter)
-  readonly property bool usePublication: root.expanded && root.publication && !!root.pub
+  readonly property bool usePublication: root.publication && !!root.pub
   readonly property var selection: ({
     book: root.book,
     chapter: root.chapter,
@@ -147,7 +147,6 @@ Item {
   }
 
   function togglePublication() {
-    if (!root.expanded) return
     root.publication = !root.publication
     if (root.publication) root.pubRequested = true
     root.persist()
@@ -811,7 +810,7 @@ Item {
     if (t === "o" || t === "O") { root.routeNow(); return }
     if (t === "m" || t === "M") { root.outlineNow(); return }
     if (t === "y" || t === "Y") { if (copyBtn) copyBtn.pulse(); root.copyUrl(); return }
-    if ((t === "p" || t === "P") && root.expanded) {
+    if (t === "p" || t === "P") {
       root.togglePublication()
       return
     }
@@ -969,7 +968,6 @@ Item {
 
         IconButton {
           id: pubBtn
-          visible: root.expanded
           iconSource: Qt.resolvedUrl("icons/publication.svg")
           selected: root.publication
           foreground: root.publication ? root.accent : root.foreground

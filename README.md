@@ -46,7 +46,7 @@ omarchy plugin enable io.github.dpshde.the-bible --section right
 - **Outline** (or `m`, Shift+Enter) opens the same passage on [margin.bible](https://margin.bible) so you can outline it.
 - **B** opens the book picker, **C** the chapter grid, **/** focuses search, **Y** copies the URL, **Ctrl+C** copies the selected text.
 - **Expand** (or `f`) opens the overlay. The window icon pops the overlay into its own window (click again to dock). Esc steps back to the popup. `F11` toggles fullscreen.
-- In the overlay or window, the paragraph icon (or `p`) toggles publication layout: flowing paragraphs, poetry indents, and words of Jesus from official BSB USJ. The bar popup stays a compact verse list.
+- The paragraph icon (or `p`) toggles publication layout: flowing paragraphs, poetry indents, and words of Jesus from official BSB USJ. It works in the bar popup, overlay, and window.
 - Escape clears search, steps back through pickers, then closes.
 
 Optional Hyprland bind (add this yourself; the plugin does not edit your bindings):
