@@ -1113,9 +1113,7 @@ Item {
           Rectangle {
             visible: blockDelegate.isVerse || blockDelegate.isFlow || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
             anchors.fill: parent
-            anchors.topMargin: blockDelegate.join ? -1 : 0
-            anchors.bottomMargin: blockDelegate.joinNext ? -1 : 0
-            radius: (isFlow || kind === "blank") && (join || joinNext) ? 0 : Style.cornerRadius
+            radius: root.usePublication && (isFlow || kind === "blank") ? 0 : Style.cornerRadius
             color: blockDelegate.selected
               ? root.selectionFill
               : (blockDelegate.hovered ? root.hoverFill : "transparent")
