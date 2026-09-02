@@ -18,7 +18,8 @@ const include = [
   "LICENSE",
   "NOTICE.md",
   "README.md",
-  "preview.png"
+  "preview.png",
+  "screenshots"
 ];
 
 if (!dest.startsWith(join(process.env.HOME || "", ".config/omarchy/plugins/"))) {

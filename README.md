@@ -8,6 +8,12 @@ The default surface is a **right-side popup** from the bar chip. Use the **expan
 
 This plugin runs inside the existing Omarchy shell process. It does not start a second Quickshell instance, does not install packages, and does not edit your Hyprland bindings or other user config.
 
+## Screenshots
+
+![Selecting Philippians 4:11–13](preview.png)
+
+![Reading Hebrews 12](screenshots/hebrews-12.png)
+
 ## Install
 
 ```sh
