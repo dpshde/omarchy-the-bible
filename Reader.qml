@@ -1071,25 +1071,27 @@ Item {
           readonly property int indent: Number(modelData.indent || 0)
           readonly property bool join: !!modelData.join
           readonly property bool joinNext: !!modelData.joinNext
+          readonly property int fillVerse: Math.floor(Number(modelData.fillVerse) || 0)
           readonly property var parts: modelData.parts || []
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
           readonly property bool selected: {
             if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
-            if (isVerse)
-              return verseNum >= Math.min(root.startVerse, root.endVerse)
-                && verseNum <= Math.max(root.startVerse, root.endVerse)
+            var lo = Math.min(root.startVerse, root.endVerse)
+            var hi = Math.max(root.startVerse, root.endVerse)
+            if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi
+            if (isVerse) return verseNum >= lo && verseNum <= hi
             if (!isFlow) return false
             for (var i = 0; i < parts.length; i++) {
               var n = Number(parts[i].n)
-              if (n >= Math.min(root.startVerse, root.endVerse) && n <= Math.max(root.startVerse, root.endVerse))
-                return true
+              if (n >= lo && n <= hi) return true
             }
             return false
           }
           readonly property bool hovered: {
             if (root.searchActive || selected) return false
+            if (fillVerse >= 1) return fillVerse === root.focusVerse
             if (isVerse) return verseNum === root.focusVerse
             if (!isFlow) return false
             for (var i = 0; i < parts.length; i++) {
@@ -1109,9 +1111,11 @@ Item {
           readonly property int bottomPad: joinNext ? 0 : (isVerse ? Style.space(3) : 0)
 
           Rectangle {
-            visible: blockDelegate.isVerse || blockDelegate.isFlow
+            visible: blockDelegate.isVerse || blockDelegate.isFlow || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
             anchors.fill: parent
-            radius: isFlow && (join || joinNext) ? 0 : Style.cornerRadius
+            anchors.topMargin: blockDelegate.join ? -1 : 0
+            anchors.bottomMargin: blockDelegate.joinNext ? -1 : 0
+            radius: (isFlow || kind === "blank") && (join || joinNext) ? 0 : Style.cornerRadius
             color: blockDelegate.selected
               ? root.selectionFill
               : (blockDelegate.hovered ? root.hoverFill : "transparent")

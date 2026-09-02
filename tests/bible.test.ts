@@ -152,4 +152,20 @@ describe("pubBlocks", () => {
     expect(rows[1].joinNext).toBe(false);
     expect(rows[2].join).toBe(false);
   });
+
+  it("fills a USFM blank between lines of the same verse", () => {
+    const pub = {
+      "PSA.23": [
+        { kind: "q1", spaced: false, indent: 1, text: "line a", parts: [{ n: 4, t: "line a", wj: false, showNum: true }] },
+        { kind: "blank", spaced: false, indent: 0, text: "", parts: [] },
+        { kind: "q2", spaced: false, indent: 2, text: "line b", parts: [{ n: 4, t: "line b", wj: false, showNum: false }] }
+      ]
+    };
+    const rows = pubBlocks(pub, "PSA", 23);
+    expect(rows[0].joinNext).toBe(true);
+    expect(rows[1].join).toBe(true);
+    expect(rows[1].joinNext).toBe(true);
+    expect(rows[1].fillVerse).toBe(4);
+    expect(rows[2].join).toBe(true);
+  });
 });

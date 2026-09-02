@@ -159,9 +159,11 @@ export type PubBlock = {
   parts: PubPart[];
   join?: boolean;
   joinNext?: boolean;
+  fillVerse?: number;
 };
 
 const FLOW_KINDS = new Set(["para", "q1", "q2", "li", "d"]);
+const BRIDGE_KINDS = new Set(["blank"]);
 
 function lastVerse(block: PubBlock): number {
   const parts = block.parts || [];
@@ -175,6 +177,18 @@ function firstVerse(block: PubBlock): number {
   return Math.floor(Number(parts[0]?.n) || 0);
 }
 
+function isFlow(block: PubBlock): boolean {
+  return FLOW_KINDS.has(block.kind);
+}
+
+function nextFlowIndex(blocks: PubBlock[], start: number): number {
+  for (let i = start; i < blocks.length; i++) {
+    if (isFlow(blocks[i])) return i;
+    if (!BRIDGE_KINDS.has(blocks[i].kind)) return -1;
+  }
+  return -1;
+}
+
 export function pubBlocks(
   pub: Record<string, PubBlock[]> | null | undefined,
   book: string,
@@ -183,16 +197,21 @@ export function pubBlocks(
   if (!pub) return [];
   const rows = pub[chapterKey(book, chapter)];
   if (!Array.isArray(rows)) return [];
-  const out = rows.map((row) => ({ ...row, join: false, joinNext: false }));
-  for (let i = 1; i < out.length; i++) {
-    const prev = out[i - 1];
-    const cur = out[i];
-    if (!FLOW_KINDS.has(prev.kind) || !FLOW_KINDS.has(cur.kind)) continue;
-    const a = lastVerse(prev);
-    const b = firstVerse(cur);
-    if (a >= 1 && a === b) {
-      cur.join = true;
-      prev.joinNext = true;
+  const out = rows.map((row) => ({ ...row, join: false, joinNext: false, fillVerse: 0 }));
+  for (let i = 0; i < out.length; i++) {
+    if (!isFlow(out[i])) continue;
+    const next = nextFlowIndex(out, i + 1);
+    if (next < 0) continue;
+    const verse = lastVerse(out[i]);
+    if (verse < 1 || verse !== firstVerse(out[next])) continue;
+    out[i].joinNext = true;
+    out[next].join = true;
+    out[i].fillVerse = verse;
+    out[next].fillVerse = verse;
+    for (let j = i + 1; j < next; j++) {
+      out[j].join = true;
+      out[j].joinNext = true;
+      out[j].fillVerse = verse;
     }
   }
   return out;
