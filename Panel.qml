@@ -19,7 +19,6 @@ Panel {
   readonly property string compactLabel: reader.compactLabel
   readonly property string displayLabel: reader.displayLabel
   readonly property string routeLink: reader.routeLink
-  readonly property string tooltipLabel: reader.displayLabel + " · BSB"
 
   function open() {
     root.controller.show()

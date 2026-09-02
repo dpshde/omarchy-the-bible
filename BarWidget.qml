@@ -13,9 +13,6 @@ BarWidget {
   readonly property bool popoutSwitchClosing: panelLoader.item
     ? panelLoader.item.popoutSwitchClosing === true
     : false
-  readonly property string tooltipLabel: panelLoader.item && panelLoader.item.tooltipLabel
-    ? panelLoader.item.tooltipLabel + "\nClick to open · scroll chapter · middle-click route.bible"
-    : "The Bible"
 
   function open() {
     if (panelLoader.item) panelLoader.item.open()
@@ -65,7 +62,7 @@ BarWidget {
     bar: root.bar
     text: "󰂼"
     labelVisible: false
-    tooltipText: root.tooltipLabel
+    tooltipText: ""
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.MiddleButton) {
         if (panelLoader.item && panelLoader.item.routeNow) panelLoader.item.routeNow()
