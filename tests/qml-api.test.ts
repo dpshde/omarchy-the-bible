@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseRefInput } from "../src/bible";
 import { bookCodes, bookName, chapterCount, suggest, tryParse, typingHint, verseCount } from "../src/qml-api";
 
 describe("tryParse", () => {
@@ -10,6 +11,16 @@ describe("tryParse", () => {
     expect(result.passage.startBook).toBe("JHN");
     expect(result.passage.startVerse).toBe(16);
     expect(result.passage.endVerse).toBe(18);
+  });
+
+  it("parses BSB parallel citations with en dashes", () => {
+    const result = tryParse(parseRefInput("Genesis 5:1–32"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.passage.startBook).toBe("GEN");
+    expect(result.passage.startChapter).toBe(5);
+    expect(result.passage.startVerse).toBe(1);
+    expect(result.passage.endVerse).toBe(32);
   });
 
   it("parses a chapter", () => {

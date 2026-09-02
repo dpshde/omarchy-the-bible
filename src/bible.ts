@@ -189,6 +189,21 @@ function nextFlowIndex(blocks: PubBlock[], start: number): number {
   return -1;
 }
 
+export function splitRefs(text: string): string[] {
+  return String(text || "")
+    .replace(/^[(\s]+/, "")
+    .replace(/[)\s]+$/, "")
+    .split(/\s*;\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function parseRefInput(text: string): string {
+  return String(text || "")
+    .trim()
+    .replace(/[–—]/g, "-");
+}
+
 export function pubBlocks(
   pub: Record<string, PubBlock[]> | null | undefined,
   book: string,

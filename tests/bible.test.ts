@@ -3,12 +3,14 @@ import {
   formatCompact,
   nextChapter,
   normalizeIndex,
+  parseRefInput,
   parseState,
   prevChapter,
   pubBlocks,
   readerBlocks,
   selectedText,
   serializeState,
+  splitRefs,
   toCanonical
 } from "../src/bible";
 
@@ -134,6 +136,33 @@ describe("readerBlocks", () => {
       { kind: "verse", text: "", n: 1, t: "In the beginning was the Word.", spaced: false },
       { kind: "verse", text: "", n: 2, t: "He was with God in the beginning.", spaced: false }
     ]);
+  });
+});
+
+describe("splitRefs", () => {
+  it("splits parallel citations", () => {
+    expect(splitRefs("Genesis 1:1–2; Hebrews 11:1–3")).toEqual([
+      "Genesis 1:1–2",
+      "Hebrews 11:1–3"
+    ]);
+  });
+
+  it("strips wrapping parentheses", () => {
+    expect(splitRefs("(Matthew 4:1–11; Mark 1:12,13)")).toEqual([
+      "Matthew 4:1–11",
+      "Mark 1:12,13"
+    ]);
+  });
+
+  it("keeps a single citation intact", () => {
+    expect(splitRefs("Genesis 5:1–32")).toEqual(["Genesis 5:1–32"]);
+    expect(splitRefs("")).toEqual([]);
+  });
+});
+
+describe("parseRefInput", () => {
+  it("normalizes en dashes for the parser", () => {
+    expect(parseRefInput("Genesis 5:1–32")).toBe("Genesis 5:1-32");
   });
 });
 

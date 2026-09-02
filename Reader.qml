@@ -385,6 +385,28 @@ Item {
     root.acceptTopSuggestion()
   }
 
+  function followWikiRef(ref) {
+    var raw = String(ref || "").trim()
+    if (!raw) return
+    root.searchError = ""
+    root.searchText = raw
+    if (searchField) {
+      searchField.text = raw
+      searchField.cursorPosition = raw.length
+    }
+    var parsed = GrabBcv.tryParse(Bible.parseRefInput(raw))
+    if (!parsed || !parsed.ok) {
+      root.searchError = parsed && parsed.message ? parsed.message : "Not a known reference"
+      root.focusSearch(false)
+      return
+    }
+    root.suppressSearchSync = true
+    root.applyParsed(parsed.passage, true)
+    root.suppressSearchSync = false
+    if (searchField) searchField.focus = false
+    root.requestVerseFocus()
+  }
+
   function submitSearch() {
     if (root.acceptTopSuggestion()) return
     var parsed = GrabBcv.tryParse(root.searchText)
@@ -1062,11 +1084,14 @@ Item {
           width: ListView.view ? ListView.view.width : 1
           height: (kind === "blank"
             ? Style.space(10)
-            : (isFlow ? flow.implicitHeight : blockText.implicitHeight)) + topPad + bottomPad
+            : (kind === "refs"
+              ? refFlow.implicitHeight
+              : (isFlow ? flow.implicitHeight : blockText.implicitHeight))) + topPad + bottomPad
 
           readonly property string kind: String(modelData.kind || "verse")
           readonly property bool isVerse: kind === "verse"
           readonly property bool isFlow: kind === "para" || kind === "q1" || kind === "q2" || kind === "li" || kind === "d"
+          readonly property var refLinks: kind === "refs" ? Bible.splitRefs(String(modelData.text || "")) : []
           readonly property int verseNum: Number(modelData.n)
           readonly property int indent: Number(modelData.indent || 0)
           readonly property bool join: !!modelData.join
@@ -1110,6 +1135,24 @@ Item {
           }
           readonly property int bottomPad: joinNext ? 0 : (isVerse ? Style.space(3) : 0)
 
+          function followRefAt(x, y) {
+            var p = refFlow.mapFromItem(blockDelegate, x, y)
+            var kids = refFlow.children
+            for (var i = 0; i < kids.length; i++) {
+              var child = kids[i]
+              if (!child || !child.refText) continue
+              if (p.x >= child.x && p.x <= child.x + child.width) {
+                root.followWikiRef(child.refText)
+                return true
+              }
+            }
+            if (blockDelegate.refLinks.length === 1) {
+              root.followWikiRef(blockDelegate.refLinks[0])
+              return true
+            }
+            return false
+          }
+
           Rectangle {
             visible: blockDelegate.isVerse || blockDelegate.isFlow || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
             anchors.fill: parent
@@ -1137,7 +1180,7 @@ Item {
             anchors.leftMargin: Style.space(4)
             anchors.rightMargin: Style.space(4)
             anchors.topMargin: blockDelegate.topPad
-            visible: !blockDelegate.isFlow && blockDelegate.kind !== "blank"
+            visible: !blockDelegate.isFlow && blockDelegate.kind !== "blank" && blockDelegate.kind !== "refs"
             text: blockDelegate.blockLabel
             color: blockDelegate.isVerse
               ? (blockDelegate.selected ? root.selectedTextColor : (blockDelegate.hovered ? root.accent : root.foreground))
@@ -1151,6 +1194,79 @@ Item {
             font.bold: (blockDelegate.kind === "heading" || blockDelegate.kind === "subhead")
               || (blockDelegate.hovered && blockDelegate.isVerse)
             wrapMode: Text.WordWrap
+          }
+
+          Flow {
+            id: refFlow
+            visible: blockDelegate.kind === "refs"
+            z: 3
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: Style.space(4)
+            anchors.rightMargin: Style.space(4)
+            anchors.topMargin: blockDelegate.topPad
+            spacing: 0
+
+            Text {
+              text: "("
+              color: root.muted
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.italic: true
+            }
+
+            Repeater {
+              model: blockDelegate.refLinks
+              delegate: Item {
+                id: refChip
+                required property var modelData
+                required property int index
+                readonly property string refText: String(modelData || "")
+                width: refRow.implicitWidth
+                height: refRow.implicitHeight
+
+                Row {
+                  id: refRow
+                  spacing: 0
+
+                  Text {
+                    visible: refChip.index > 0
+                    text: "; "
+                    color: root.muted
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.italic: true
+                  }
+
+                  Text {
+                    text: refChip.refText
+                    color: refHover.containsMouse ? root.accent : root.muted
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.italic: true
+                  }
+                }
+
+                MouseArea {
+                  id: refHover
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  preventStealing: true
+                  z: 4
+                  onClicked: root.followWikiRef(refChip.refText)
+                }
+              }
+            }
+
+            Text {
+              text: ")"
+              color: root.muted
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.italic: true
+            }
           }
 
           Flow {
@@ -1239,11 +1355,23 @@ Item {
           acceptedButtons: Qt.LeftButton
           hoverEnabled: true
           preventStealing: true
+          propagateComposedEvents: true
           enabled: !root.usePublication
           cursorShape: Qt.IBeamCursor
           onPressed: function(mouse) {
+            var idx = root.verseIndexAt(mouse.y)
+            var row = root.readerRows[idx]
+            if (row && String(row.kind || "") === "refs") {
+              var item = verseList.itemAtIndex(idx)
+              if (item && item.followRefAt) {
+                var local = item.mapFromItem(verseList, mouse.x, mouse.y)
+                item.followRefAt(local.x, local.y)
+              }
+              mouse.accepted = true
+              return
+            }
             root.requestVerseFocus()
-            var verse = root.verseAtRow(root.verseIndexAt(mouse.y))
+            var verse = root.verseAtRow(idx)
             if (!verse) return
             root.dragging = true
             if (mouse.modifiers & Qt.ShiftModifier) root.selectRange(root.anchorVerse, verse)

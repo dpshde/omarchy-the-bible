@@ -19,6 +19,8 @@ await bundlePragmaLibrary({
     "versesFor",
     "readerBlocks",
     "pubBlocks",
+    "splitRefs",
+    "parseRefInput",
     "lastVerseNumber",
     "clampVerse",
     "orderedRange",
