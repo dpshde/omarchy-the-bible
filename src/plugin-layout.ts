@@ -150,5 +150,5 @@ export function artifactKindFromHeader(header: Uint8Array, mode: number): "elf" 
 }
 
 export function looksLikeShellInterpolation(text: string): boolean {
-  return /(?:^|[\s["'])(?:bash|sh|zsh|dash)\s+-c\b|\/bin\/sh\b/.test(text);
+  return /\b(?:bash|sh|zsh|dash)\b[\s"',[\]]*-c\b|\/bin\/sh\b/.test(text);
 }
