@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/omarchy-route-bible/src/bible.ts. Do not edit by hand.
+// Generated from /workspace/src/bible.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};
@@ -89,6 +89,7 @@ var BibleApi = (function() {
     parsePublication: () => parsePublication,
     parseRefInput: () => parseRefInput,
     parseState: () => parseState,
+    parseSummonPayload: () => parseSummonPayload,
     prevBook: () => prevBook,
     prevChapter: () => prevChapter,
     pubBlocks: () => pubBlocks,
@@ -106,6 +107,9 @@ var BibleApi = (function() {
   var MAX_INDEX_BYTES = 6e6;
   var MAX_PUB_BYTES = 16e6;
   var MAX_STATE_BYTES = 2048;
+  var MAX_SEARCH_CHARS = 512;
+  var MAX_SUMMON_BYTES = 1024;
+  var MAX_JSON_DEPTH_SUMMON = 2;
   var MAX_CHAPTER_KEYS = 1300;
   var MIN_CHAPTER_KEYS = 1e3;
   var CANON_CHAPTER_COUNT = 1189;
@@ -709,6 +713,22 @@ var BibleApi = (function() {
       return safe;
     }
   }
+  function parseSummonPayload(raw) {
+    if (typeof raw !== "string" || !jsonBoundsOk(raw, MAX_SUMMON_BYTES, MAX_JSON_DEPTH_SUMMON)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      const q = parsed.q;
+      if (typeof q !== "string") return null;
+      const text = q.trim();
+      if (!text || text.length > MAX_SEARCH_CHARS || text.includes("\0")) return null;
+      return { q: text };
+    } catch (e) {
+      return null;
+    }
+  }
   return __toCommonJS(bible_exports);
 })();
 
@@ -742,5 +762,6 @@ function booksForTestament() { return BibleApi.booksForTestament.apply(null, arg
 function selectedText() { return BibleApi.selectedText.apply(null, arguments); }
 function serializeState() { return BibleApi.serializeState.apply(null, arguments); }
 function parseState() { return BibleApi.parseState.apply(null, arguments); }
+function parseSummonPayload() { return BibleApi.parseSummonPayload.apply(null, arguments); }
 function stateMaxBytes() { return BibleApi.stateMaxBytes.apply(null, arguments); }
 function isKnownBook() { return BibleApi.isKnownBook.apply(null, arguments); }

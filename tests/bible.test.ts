@@ -9,6 +9,7 @@ import {
   parsePublication,
   parseRefInput,
   parseState,
+  parseSummonPayload,
   prevChapter,
   pubBlocks,
   readerBlocks,
@@ -17,7 +18,7 @@ import {
   splitRefs,
   toCanonical
 } from "../src/bible";
-import { MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX, MAX_STATE_BYTES } from "../src/limits";
+import { MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX, MAX_SEARCH_CHARS, MAX_STATE_BYTES, MAX_SUMMON_BYTES } from "../src/limits";
 
 const bible = {
   "JHN.3": [
@@ -107,6 +108,17 @@ describe("state", () => {
     expect(parseState("x".repeat(MAX_STATE_BYTES + 1))).toEqual(fallback);
     expect(isKnownBook("JHN")).toBe(true);
     expect(isKnownBook("nope")).toBe(false);
+  });
+});
+
+describe("parseSummonPayload", () => {
+  it("accepts a short string q and rejects oversized or non-string values", () => {
+    expect(parseSummonPayload('{"q":"jn 3:16"}')).toEqual({ q: "jn 3:16" });
+    expect(parseSummonPayload('{"q":1}')).toBeNull();
+    expect(parseSummonPayload('["jn 3:16"]')).toBeNull();
+    expect(parseSummonPayload('{"q":"' + "x".repeat(MAX_SEARCH_CHARS + 1) + '"}')).toBeNull();
+    expect(parseSummonPayload("x".repeat(MAX_SUMMON_BYTES + 1))).toBeNull();
+    expect(parseSummonPayload('{"q":{"nested":true}}')).toBeNull();
   });
 });
 

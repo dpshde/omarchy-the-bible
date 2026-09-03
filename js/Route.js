@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/omarchy-route-bible/src/route.ts. Do not edit by hand.
+// Generated from /workspace/src/route.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};
@@ -37,10 +37,12 @@ var RouteApi = (function() {
   // src/route.ts
   var route_exports = {};
   __export(route_exports, {
+    BROWSER_HOSTS: () => BROWSER_HOSTS,
     MARGIN_BASE: () => MARGIN_BASE,
     ROUTE_BASE: () => ROUTE_BASE,
     ROUTE_SRC: () => ROUTE_SRC,
     ROUTE_UTM_MEDIUM: () => ROUTE_UTM_MEDIUM,
+    isAllowedBrowserUrl: () => isAllowedBrowserUrl,
     marginUrl: () => marginUrl,
     routeUrl: () => routeUrl
   });
@@ -48,6 +50,7 @@ var RouteApi = (function() {
   var ROUTE_SRC = "route_bible_omarchy";
   var ROUTE_UTM_MEDIUM = "omarchy_plugin";
   var MARGIN_BASE = "https://margin.bible";
+  var BROWSER_HOSTS = /* @__PURE__ */ new Set(["route.bible", "margin.bible"]);
   function slugFor(canonical) {
     return String(canonical || "").trim().toLowerCase().replace(/^\/+/, "");
   }
@@ -65,8 +68,20 @@ var RouteApi = (function() {
     if (!slug) return MARGIN_BASE;
     return `${MARGIN_BASE}/${encodeURIComponent(slug)}`;
   }
+  function isAllowedBrowserUrl(url) {
+    if (typeof url !== "string" || url.length > 2048) return false;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:") return false;
+      if (parsed.username || parsed.password) return false;
+      return BROWSER_HOSTS.has(parsed.hostname.toLowerCase());
+    } catch (e) {
+      return false;
+    }
+  }
   return __toCommonJS(route_exports);
 })();
 
 function routeUrl() { return RouteApi.routeUrl.apply(null, arguments); }
 function marginUrl() { return RouteApi.marginUrl.apply(null, arguments); }
+function isAllowedBrowserUrl() { return RouteApi.isAllowedBrowserUrl.apply(null, arguments); }

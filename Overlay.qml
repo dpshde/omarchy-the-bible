@@ -47,15 +47,7 @@ Item {
     Qt.callLater(function() {
       keyCatcher.forceActiveFocus()
       reader.focusSearch()
-      if (payloadJson) {
-        try {
-          var payload = JSON.parse(payloadJson)
-          if (payload && payload.q) {
-            reader.searchText = String(payload.q)
-            reader.submitSearch()
-          }
-        } catch (e) {}
-      }
+      if (payloadJson) reader.applySummonPayload(payloadJson)
     })
   }
 
