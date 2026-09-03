@@ -12,6 +12,7 @@
   "scripts": {
     "build": "node scripts/bundle-grab-bcv.mjs && node scripts/bundle-bible.mjs && node scripts/bundle-route.mjs",
     "fetch-bsb": "node scripts/fetch-bsb.mjs",
+    "install:local": "node scripts/install-local.mjs",
     "check": "pnpm run typecheck && pnpm run test && pnpm run build",
     "lint": "pnpm exec oxlint src tests scripts",
     "test": "pnpm exec vitest run",

@@ -16,25 +16,13 @@ This plugin runs inside the existing Omarchy shell process. It does not start a 
 
 ## Install
 
-Omarchy clones this repository into `~/.config/omarchy/plugins/io.github.dpshde.the-bible`. That checkout is the plugin. Adding it does not run a package manager, lifecycle hook, or extra installer.
+Listing install uses the committed `data/` and `js/` files and does not run Node.
 
 ```sh
 omarchy plugin add https://github.com/dpshde/omarchy-the-bible.git --enable
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.dpshde.the-bible
-omarchy bar move io.github.dpshde.the-bible --section right
 ```
 
-From a local checkout of the same committed files:
-
-```sh
-omarchy plugin add "$PWD" --enable
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.dpshde.the-bible
-omarchy bar move io.github.dpshde.the-bible --section right
-```
-
-Omarchy forbids symlinks in plugin folders; add the checkout rather than linking it. Runtime verse text and JS are the committed `data/` and `js/` files.
-
-A marketplace or workbench review pins a full 40-character commit, checks it out detached with Git hooks disabled, then runs `omarchy plugin validate`. `omarchy plugin add` follows upstream HEAD and is not verification-bound.
+To rebuild bundled data from a checkout, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Usage
 
@@ -84,4 +72,4 @@ Runtime:
 - Opens [route.bible](https://route.bible) and [margin.bible](https://margin.bible) with `omarchy launch browser` when you ask it to.
 - Copies text and URLs with `wl-copy`.
 
-Maintainers regenerating those artifacts stay inside this checkout: the `fetch-bsb` and `build` scripts in `package.json`. `fetch-bsb` downloads the pinned USJ zip into a temp directory, verifies SHA-256, and writes `data/bsb.json` and `data/pub.json` here. It does not write under `~/.config` or `~/.local`. Node toolchain packages (`grab-bcv`, `esbuild`, TypeScript, Vitest, oxlint) are build-time only. Marketplace users do not run them.
+Build-time only (`pnpm` / Node): `grab-bcv`, `esbuild`, TypeScript, Vitest, oxlint. Marketplace install uses the committed `js/` and `data/` files and does not need Node. See [CONTRIBUTING.md](CONTRIBUTING.md) for the developer rebuild.

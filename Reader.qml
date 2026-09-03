@@ -514,13 +514,13 @@ Item {
   }
 
   function copyUrl() {
-    Quickshell.execDetached(["wl-copy", "--", root.routeLink])
+    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(root.routeLink) + " | wl-copy"])
   }
 
   function copyText() {
     var body = Bible.selectedText(root.bible, root.selection)
     var payload = root.displayLabel + " (BSB)\n" + body + "\n" + root.routeLink
-    Quickshell.execDetached(["wl-copy", "--", payload])
+    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(payload) + " | wl-copy"])
   }
 
   function navOnce() {
