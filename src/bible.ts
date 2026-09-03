@@ -1,3 +1,4 @@
+import { getChapterCount, getVerseCount, isOsisBookCode } from "grab-bcv";
 import {
   CANON_BOOK_COUNT,
   CANON_CHAPTER_COUNT,
@@ -644,18 +645,22 @@ export function parseState(raw: string, fallback: Selection = {
     const parsed = JSON.parse(text) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return safe;
     const rec = parsed as Record<string, unknown>;
-    if (typeof rec.book !== "string" || !isKnownBook(rec.book)) return safe;
+    if (typeof rec.book !== "string" || !isKnownBook(rec.book) || !isOsisBookCode(rec.book)) return safe;
+    const book = rec.book;
     const chapter = boundInt(rec.chapter, 1, MAX_CHAPTER);
     if (chapter == null) return safe;
+    if (chapter > getChapterCount(book)) return safe;
     const startVerse = parseVerseBound(rec.startVerse, safe.startVerse);
     const endVerse = parseVerseBound(rec.endVerse, startVerse === 0 ? 0 : safe.endVerse);
     if (startVerse == null || endVerse == null) return safe;
     const publication = rec.publication === true;
     if (startVerse < 1 || endVerse < 1) {
-      return { book: rec.book, chapter, startVerse: 0, endVerse: 0, publication };
+      return { book, chapter, startVerse: 0, endVerse: 0, publication };
     }
+    const maxVerse = getVerseCount(book, chapter) ?? 0;
+    if (maxVerse < 1 || startVerse > maxVerse || endVerse > maxVerse) return safe;
     return {
-      book: rec.book,
+      book,
       chapter,
       startVerse,
       endVerse: Math.max(startVerse, endVerse),

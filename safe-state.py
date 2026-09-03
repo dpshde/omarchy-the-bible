@@ -37,6 +37,50 @@ def require_stat(st: os.stat_result, max_bytes: int) -> None:
         fail("size")
 
 
+def require_dir(st: os.stat_result) -> None:
+    if stat.S_ISLNK(st.st_mode):
+        fail("symlink")
+    if not stat.S_ISDIR(st.st_mode):
+        fail("not dir")
+    if st.st_uid != os.getuid():
+        fail("owner")
+    if st.st_mode & 0o022:
+        fail("mode")
+
+
+def omarchy_settings_dirs(path: str) -> list[str] | None:
+    expected = ("settings", "omarchy", "state", ".local")
+    names: list[str] = []
+    dirs: list[str] = []
+    cur = os.path.dirname(path)
+    while cur and cur != os.path.dirname(cur):
+        names.append(os.path.basename(cur))
+        dirs.append(cur)
+        if tuple(names) == expected:
+            dirs.reverse()
+            return dirs
+        if len(names) > len(expected):
+            break
+        cur = os.path.dirname(cur)
+    return None
+
+
+def ensure_parent_chain(path: str) -> None:
+    chain = omarchy_settings_dirs(path)
+    if chain is None:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, mode=0o700, exist_ok=True)
+        return
+    for dirpath in chain:
+        try:
+            st = os.lstat(dirpath)
+        except FileNotFoundError:
+            os.mkdir(dirpath, mode=0o700)
+            continue
+        require_dir(st)
+
+
 def cmd_check(path: str, max_bytes: int) -> None:
     try:
         st = os.lstat(path)
@@ -78,9 +122,7 @@ def cmd_write(path: str, max_bytes: int) -> None:
         data = sys.stdin.buffer.read(max_bytes + 1)
     if len(data) > max_bytes:
         fail("size")
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, mode=0o700, exist_ok=True)
+    ensure_parent_chain(path)
     tmp = path + ".tmp"
     fd = open_tmp(tmp)
     try:

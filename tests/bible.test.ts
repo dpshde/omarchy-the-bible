@@ -94,6 +94,28 @@ describe("state", () => {
     expect(parsed).toEqual({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0, publication: false });
   });
 
+  it("rejects invalid per-book chapter and verse combinations", () => {
+    const fallback = {
+      book: "JHN",
+      chapter: 3,
+      startVerse: 16,
+      endVerse: 16,
+      publication: false
+    };
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 22, startVerse: 1, endVerse: 1 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 37, endVerse: 37 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 16, endVerse: 40 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "PSA", chapter: 119, startVerse: 177, endVerse: 177 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 22, startVerse: 0, endVerse: 0 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 }))).toEqual({
+      book: "JHN",
+      chapter: 3,
+      startVerse: 0,
+      endVerse: 0,
+      publication: false
+    });
+  });
+
   it("rejects unknown books and out-of-range numbers", () => {
     const fallback = {
       book: "JHN",
