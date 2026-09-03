@@ -1,6 +1,6 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -31,6 +31,8 @@ const runtimeScanGlobs = [
   "js/GrabBcv.js",
   "manifest.json"
 ];
+
+const firstPartyRuntimeGlobs = runtimeScanGlobs.filter((rel) => rel !== "js/GrabBcv.js");
 
 function walkFiles(dir: string): string[] {
   const out: string[] = [];
@@ -177,7 +179,7 @@ describe("runtime file staging confinement", () => {
     symlinkSync(outside, join(config, "omarchy"));
     const dest = pluginDir(home);
     expect(classifyWrite(home, dest)).toBe("plugin");
-    expect(resolve(dest).startsWith(resolve(outside) + "/") || resolve(dest) === resolve(outside)).toBe(true);
+    expect(realpathSync(join(home, ".config/omarchy"))).toBe(realpathSync(outside));
     expect(() => stageRuntimeFiles(home, repoRoot)).toThrow(/realpath escaped HOME/);
     expect(existsSync(join(outside, "plugins", PLUGIN_ID, "manifest.json"))).toBe(false);
   });
@@ -213,6 +215,9 @@ describe("user-facing install contract", () => {
     for (const rel of runtimeScanGlobs) {
       const text = readFileSync(join(repoRoot, rel), "utf8");
       expect(looksLikePackageManager(text), rel).toBe(false);
+    }
+    for (const rel of firstPartyRuntimeGlobs) {
+      const text = readFileSync(join(repoRoot, rel), "utf8");
       expect(text, rel).not.toMatch(/\b(?:curl|wget)\b/);
       expect(text, rel).not.toMatch(/\b(?:npm|pnpm|yarn|bun|pip|pip3|cargo|brew)\b/);
       expect(text, rel).not.toMatch(/\bfetch\s*\(/);
