@@ -483,6 +483,78 @@ export function orderedRange(a: number, b: number): { start: number; end: number
   return left <= right ? { start: left, end: right } : { start: right, end: left };
 }
 
+export function verseInRange(verse: number, startVerse: number, endVerse: number): boolean {
+  if (!hasVerseSelection(startVerse, endVerse)) return false;
+  const { start, end } = orderedRange(startVerse, endVerse);
+  const n = Math.floor(Number(verse) || 0);
+  return n >= start && n <= end;
+}
+
+export function uniqueBlockVerses(block: Pick<PubBlock, "parts" | "kind">): number[] {
+  const seen = new Set<number>();
+  for (const part of block.parts || []) {
+    const n = Math.floor(Number(part.n) || 0);
+    if (n >= 1) seen.add(n);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+export function pubBlockUsesPerVerseHighlight(block: PubBlock): boolean {
+  return FLOW_KINDS.has(block.kind) && uniqueBlockVerses(block).length > 1;
+}
+
+export function verseSelected(
+  verse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): boolean {
+  if (searchActive) return false;
+  return verseInRange(verse, startVerse, endVerse);
+}
+
+export function verseHovered(
+  verse: number,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): boolean {
+  if (searchActive) return false;
+  const n = Math.floor(Number(verse) || 0);
+  if (verseSelected(n, startVerse, endVerse, false)) return false;
+  return n === Math.floor(Number(focusVerse) || 0);
+}
+
+export function pubRowIndexForVerse(
+  rows: Array<PubBlock | ReaderBlock>,
+  verse: number
+): number {
+  const n = Math.floor(Number(verse) || 0);
+  if (n < 1) return -1;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    if (row.kind === "verse" && "n" in row && row.n === n) return i;
+    const parts = "parts" in row ? row.parts : undefined;
+    for (const part of parts || []) {
+      if (Math.floor(Number(part.n) || 0) === n) return i;
+    }
+    if ("fillVerse" in row && row.fillVerse === n) return i;
+  }
+  return -1;
+}
+
+export function advanceFocusVerse(
+  bible: BibleIndex | null | undefined,
+  book: string,
+  chapter: number,
+  focusVerse: number,
+  delta: number
+): number {
+  return clampVerse(bible, book, chapter, focusVerse + delta);
+}
+
 export function hasVerseSelection(startVerse: number, endVerse: number): boolean {
   return Math.floor(Number(startVerse)) >= 1 && Math.floor(Number(endVerse)) >= 1;
 }

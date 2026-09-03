@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  advanceFocusVerse,
   formatCompact,
   isKnownBook,
   jsonBoundsOk,
@@ -11,14 +12,21 @@ import {
   parseState,
   parseSummonPayload,
   prevChapter,
+  pubBlockUsesPerVerseHighlight,
   pubBlocks,
+  pubRowIndexForVerse,
   readerBlocks,
   selectedText,
   serializeState,
   splitRefs,
-  toCanonical
+  toCanonical,
+  uniqueBlockVerses,
+  verseHovered,
+  verseInRange,
+  verseSelected
 } from "../src/bible";
 import { MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX, MAX_SEARCH_CHARS, MAX_STATE_BYTES, MAX_SUMMON_BYTES } from "../src/limits";
+import pub from "../data/pub.json";
 
 const bible = {
   "JHN.3": [
@@ -270,5 +278,75 @@ describe("parseIndex", () => {
 
   it("rejects publication JSON that is not a full bounded index", () => {
     expect(parsePublication(JSON.stringify({ "JHN.1": [{ kind: "para", spaced: false, indent: 0, text: "x", parts: [] }] }))).toBeNull();
+  });
+});
+
+describe("USFM keyboard verse navigation", () => {
+  const john1 = pubBlocks(pub as Record<string, import("../src/bible").PubBlock[]>, "JHN", 1);
+
+  it("marks multi-verse John 1 paragraphs for per-verse highlighting", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1));
+    expect(opening).toBeTruthy();
+    expect(uniqueBlockVerses(opening!)).toEqual([1, 2, 3, 4, 5]);
+    expect(pubBlockUsesPerVerseHighlight(opening!)).toBe(true);
+  });
+
+  it("advances focus one verse at a time through a shared paragraph", () => {
+    const bible = normalizeIndex({
+      "JHN.1": [
+        { n: 1, t: "In the beginning was the Word." },
+        { n: 2, t: "He was with God in the beginning." },
+        { n: 3, t: "Through Him all things were made." },
+        { n: 4, t: "In Him was life." },
+        { n: 5, t: "The Light shines in the darkness." }
+      ]
+    });
+    let focus = 1;
+    const steps: number[] = [focus];
+    for (let i = 0; i < 4; i++) {
+      focus = advanceFocusVerse(bible, "JHN", 1, focus, 1);
+      steps.push(focus);
+    }
+    expect(steps).toEqual([1, 2, 3, 4, 5]);
+    focus = advanceFocusVerse(bible, "JHN", 1, focus, 1);
+    expect(focus).toBe(5);
+  });
+
+  it("highlights only the focused verse inside a John 1 paragraph", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const verses = uniqueBlockVerses(opening);
+    for (const focus of verses) {
+      const highlighted = verses.filter((n) => verseHovered(n, focus, 0, 0, false));
+      expect(highlighted).toEqual([focus]);
+    }
+  });
+
+  it("highlights only selected verses inside a John 1 paragraph", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const verses = uniqueBlockVerses(opening);
+    for (const selected of verses) {
+      const highlighted = verses.filter((n) => verseSelected(n, selected, selected, false));
+      expect(highlighted).toEqual([selected]);
+    }
+  });
+
+  it("keeps scroll target stable while focus moves within the same paragraph", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const rowIndex = john1.indexOf(opening);
+    expect(pubRowIndexForVerse(john1, 1)).toBe(rowIndex);
+    expect(pubRowIndexForVerse(john1, 3)).toBe(rowIndex);
+    expect(pubRowIndexForVerse(john1, 5)).toBe(rowIndex);
+    expect(pubRowIndexForVerse(john1, 6)).not.toBe(rowIndex);
+  });
+
+  it("preserves range selection semantics across verses in one paragraph", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const verses = uniqueBlockVerses(opening);
+    const selected = verses.filter((n) => verseSelected(n, 2, 4, false));
+    expect(selected).toEqual([2, 3, 4]);
+    expect(verseInRange(2, 2, 4)).toBe(true);
+    expect(verseInRange(1, 2, 4)).toBe(false);
+    expect(verseHovered(3, 1, 2, 4, false)).toBe(false);
+    expect(verseHovered(1, 1, 2, 4, false)).toBe(true);
   });
 });

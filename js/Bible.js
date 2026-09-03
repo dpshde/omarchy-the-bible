@@ -64,6 +64,7 @@ var BibleApi = (function() {
     MAX_STATE_BYTES: () => MAX_STATE_BYTES,
     MAX_VERSE: () => MAX_VERSE,
     OT_BOOK_COUNT: () => OT_BOOK_COUNT,
+    advanceFocusVerse: () => advanceFocusVerse,
     assertBibleIndex: () => assertBibleIndex,
     assertPubIndex: () => assertPubIndex,
     booksForTestament: () => booksForTestament,
@@ -92,7 +93,9 @@ var BibleApi = (function() {
     parseSummonPayload: () => parseSummonPayload,
     prevBook: () => prevBook,
     prevChapter: () => prevChapter,
+    pubBlockUsesPerVerseHighlight: () => pubBlockUsesPerVerseHighlight,
     pubBlocks: () => pubBlocks,
+    pubRowIndexForVerse: () => pubRowIndexForVerse,
     readerBlocks: () => readerBlocks,
     selectedText: () => selectedText,
     serializeState: () => serializeState,
@@ -100,6 +103,10 @@ var BibleApi = (function() {
     stateMaxBytes: () => stateMaxBytes,
     testamentOf: () => testamentOf,
     toCanonical: () => toCanonical,
+    uniqueBlockVerses: () => uniqueBlockVerses,
+    verseHovered: () => verseHovered,
+    verseInRange: () => verseInRange,
+    verseSelected: () => verseSelected,
     versesFor: () => versesFor
   });
 
@@ -968,6 +975,51 @@ var BibleApi = (function() {
     const right = Math.floor(Number(b) || left);
     return left <= right ? { start: left, end: right } : { start: right, end: left };
   }
+  function verseInRange(verse, startVerse, endVerse) {
+    if (!hasVerseSelection(startVerse, endVerse)) return false;
+    const { start, end } = orderedRange(startVerse, endVerse);
+    const n = Math.floor(Number(verse) || 0);
+    return n >= start && n <= end;
+  }
+  function uniqueBlockVerses(block) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const part of block.parts || []) {
+      const n = Math.floor(Number(part.n) || 0);
+      if (n >= 1) seen.add(n);
+    }
+    return [...seen].sort((a, b) => a - b);
+  }
+  function pubBlockUsesPerVerseHighlight(block) {
+    return FLOW_KINDS.has(block.kind) && uniqueBlockVerses(block).length > 1;
+  }
+  function verseSelected(verse, startVerse, endVerse, searchActive = false) {
+    if (searchActive) return false;
+    return verseInRange(verse, startVerse, endVerse);
+  }
+  function verseHovered(verse, focusVerse, startVerse, endVerse, searchActive = false) {
+    if (searchActive) return false;
+    const n = Math.floor(Number(verse) || 0);
+    if (verseSelected(n, startVerse, endVerse, false)) return false;
+    return n === Math.floor(Number(focusVerse) || 0);
+  }
+  function pubRowIndexForVerse(rows, verse) {
+    const n = Math.floor(Number(verse) || 0);
+    if (n < 1) return -1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      if (row.kind === "verse" && "n" in row && row.n === n) return i;
+      const parts = "parts" in row ? row.parts : void 0;
+      for (const part of parts || []) {
+        if (Math.floor(Number(part.n) || 0) === n) return i;
+      }
+      if ("fillVerse" in row && row.fillVerse === n) return i;
+    }
+    return -1;
+  }
+  function advanceFocusVerse(bible, book, chapter, focusVerse, delta) {
+    return clampVerse(bible, book, chapter, focusVerse + delta);
+  }
   function hasVerseSelection(startVerse, endVerse) {
     return Math.floor(Number(startVerse)) >= 1 && Math.floor(Number(endVerse)) >= 1;
   }
@@ -1174,6 +1226,13 @@ function parseRefInput() { return BibleApi.parseRefInput.apply(null, arguments);
 function lastVerseNumber() { return BibleApi.lastVerseNumber.apply(null, arguments); }
 function clampVerse() { return BibleApi.clampVerse.apply(null, arguments); }
 function orderedRange() { return BibleApi.orderedRange.apply(null, arguments); }
+function verseInRange() { return BibleApi.verseInRange.apply(null, arguments); }
+function uniqueBlockVerses() { return BibleApi.uniqueBlockVerses.apply(null, arguments); }
+function pubBlockUsesPerVerseHighlight() { return BibleApi.pubBlockUsesPerVerseHighlight.apply(null, arguments); }
+function verseSelected() { return BibleApi.verseSelected.apply(null, arguments); }
+function verseHovered() { return BibleApi.verseHovered.apply(null, arguments); }
+function pubRowIndexForVerse() { return BibleApi.pubRowIndexForVerse.apply(null, arguments); }
+function advanceFocusVerse() { return BibleApi.advanceFocusVerse.apply(null, arguments); }
 function hasVerseSelection() { return BibleApi.hasVerseSelection.apply(null, arguments); }
 function isWholeChapter() { return BibleApi.isWholeChapter.apply(null, arguments); }
 function toCanonical() { return BibleApi.toCanonical.apply(null, arguments); }
