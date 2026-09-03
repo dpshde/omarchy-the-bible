@@ -1,3 +1,4 @@
+import { getChapterCount, getVerseCount, isOsisBookCode } from "grab-bcv";
 import {
   CANON_BOOK_COUNT,
   CANON_CHAPTER_COUNT,
@@ -10,8 +11,11 @@ import {
   MAX_JSON_DEPTH_STATE,
   MAX_PARTS_PER_BLOCK,
   MAX_PUB_BYTES,
+  MAX_SEARCH_CHARS,
   MAX_STATE_BYTES,
   MAX_STRING_CHARS,
+  MAX_SUMMON_BYTES,
+  MAX_JSON_DEPTH_SUMMON,
   MAX_VERSE,
   MAX_VERSES_PER_CHAPTER,
   MIN_CHAPTER_KEYS,
@@ -641,18 +645,22 @@ export function parseState(raw: string, fallback: Selection = {
     const parsed = JSON.parse(text) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return safe;
     const rec = parsed as Record<string, unknown>;
-    if (typeof rec.book !== "string" || !isKnownBook(rec.book)) return safe;
+    if (typeof rec.book !== "string" || !isKnownBook(rec.book) || !isOsisBookCode(rec.book)) return safe;
+    const book = rec.book;
     const chapter = boundInt(rec.chapter, 1, MAX_CHAPTER);
     if (chapter == null) return safe;
+    if (chapter > getChapterCount(book)) return safe;
     const startVerse = parseVerseBound(rec.startVerse, safe.startVerse);
     const endVerse = parseVerseBound(rec.endVerse, startVerse === 0 ? 0 : safe.endVerse);
     if (startVerse == null || endVerse == null) return safe;
     const publication = rec.publication === true;
     if (startVerse < 1 || endVerse < 1) {
-      return { book: rec.book, chapter, startVerse: 0, endVerse: 0, publication };
+      return { book, chapter, startVerse: 0, endVerse: 0, publication };
     }
+    const maxVerse = getVerseCount(book, chapter) ?? 0;
+    if (maxVerse < 1 || startVerse > maxVerse || endVerse > maxVerse) return safe;
     return {
-      book: rec.book,
+      book,
       chapter,
       startVerse,
       endVerse: Math.max(startVerse, endVerse),
@@ -660,5 +668,22 @@ export function parseState(raw: string, fallback: Selection = {
     };
   } catch {
     return safe;
+  }
+}
+
+export function parseSummonPayload(raw: unknown): { q: string } | null {
+  if (typeof raw !== "string" || !jsonBoundsOk(raw, MAX_SUMMON_BYTES, MAX_JSON_DEPTH_SUMMON)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const q = (parsed as Record<string, unknown>).q;
+    if (typeof q !== "string") return null;
+    const text = q.trim();
+    if (!text || text.length > MAX_SEARCH_CHARS || text.includes("\0")) return null;
+    return { q: text };
+  } catch {
+    return null;
   }
 }

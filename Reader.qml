@@ -472,6 +472,19 @@ Item {
     Qt.callLater(function() { root.followWikiRef(raw) })
   }
 
+  function applySummonPayload(raw) {
+    var payload = Bible.parseSummonPayload(raw)
+    if (!payload || !payload.q) return false
+    root.searchError = ""
+    root.searchText = payload.q
+    if (searchField) {
+      searchField.text = payload.q
+      searchField.cursorPosition = payload.q.length
+    }
+    root.submitSearch()
+    return true
+  }
+
   function submitSearch() {
     if (root.acceptTopSuggestion()) return
     var parsed = GrabBcv.tryParse(root.searchText)
@@ -499,28 +512,33 @@ Item {
     return root.parsedOrSelection() !== null
   }
 
+  function launchBounded(url) {
+    if (!Route.isAllowedBrowserUrl(url)) return
+    Util.execArgv(["omarchy", "launch", "browser", url])
+  }
+
   function routeNow() {
     var parsed = root.parsedOrSelection()
     if (parsed) root.applyParsed(parsed, true)
-    Util.execArgv(["omarchy", "launch", "browser", root.routeLink])
+    root.launchBounded(root.routeLink)
     root.requestClose()
   }
 
   function outlineNow() {
     var parsed = root.parsedOrSelection()
     if (parsed) root.applyParsed(parsed, true)
-    Util.execArgv(["omarchy", "launch", "browser", root.marginLink])
+    root.launchBounded(root.marginLink)
     root.requestClose()
   }
 
   function copyUrl() {
-    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(root.routeLink) + " | wl-copy"])
+    Quickshell.execDetached(["wl-copy", "--", root.routeLink])
   }
 
   function copyText() {
     var body = Bible.selectedText(root.bible, root.selection)
     var payload = root.displayLabel + " (BSB)\n" + body + "\n" + root.routeLink
-    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(payload) + " | wl-copy"])
+    Quickshell.execDetached(["wl-copy", "--", payload])
   }
 
   function navOnce() {

@@ -34,6 +34,13 @@ describe("tryParse", () => {
     const result = tryParse("   ");
     expect(result.ok).toBe(false);
   });
+
+  it("rejects oversized input before grab-bcv URL parsing", () => {
+    const result = tryParse("https://www.bible.com/" + "a".repeat(3000));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("TOO_LONG");
+  });
 });
 
 describe("suggest", () => {

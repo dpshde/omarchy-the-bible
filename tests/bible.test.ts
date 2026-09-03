@@ -9,6 +9,7 @@ import {
   parsePublication,
   parseRefInput,
   parseState,
+  parseSummonPayload,
   prevChapter,
   pubBlocks,
   readerBlocks,
@@ -17,7 +18,7 @@ import {
   splitRefs,
   toCanonical
 } from "../src/bible";
-import { MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX, MAX_STATE_BYTES } from "../src/limits";
+import { MAX_INDEX_BYTES, MAX_JSON_DEPTH_INDEX, MAX_SEARCH_CHARS, MAX_STATE_BYTES, MAX_SUMMON_BYTES } from "../src/limits";
 
 const bible = {
   "JHN.3": [
@@ -93,6 +94,28 @@ describe("state", () => {
     expect(parsed).toEqual({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0, publication: false });
   });
 
+  it("rejects invalid per-book chapter and verse combinations", () => {
+    const fallback = {
+      book: "JHN",
+      chapter: 3,
+      startVerse: 16,
+      endVerse: 16,
+      publication: false
+    };
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 22, startVerse: 1, endVerse: 1 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 37, endVerse: 37 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 16, endVerse: 40 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "PSA", chapter: 119, startVerse: 177, endVerse: 177 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 22, startVerse: 0, endVerse: 0 }))).toEqual(fallback);
+    expect(parseState(JSON.stringify({ book: "JHN", chapter: 3, startVerse: 0, endVerse: 0 }))).toEqual({
+      book: "JHN",
+      chapter: 3,
+      startVerse: 0,
+      endVerse: 0,
+      publication: false
+    });
+  });
+
   it("rejects unknown books and out-of-range numbers", () => {
     const fallback = {
       book: "JHN",
@@ -107,6 +130,17 @@ describe("state", () => {
     expect(parseState("x".repeat(MAX_STATE_BYTES + 1))).toEqual(fallback);
     expect(isKnownBook("JHN")).toBe(true);
     expect(isKnownBook("nope")).toBe(false);
+  });
+});
+
+describe("parseSummonPayload", () => {
+  it("accepts a short string q and rejects oversized or non-string values", () => {
+    expect(parseSummonPayload('{"q":"jn 3:16"}')).toEqual({ q: "jn 3:16" });
+    expect(parseSummonPayload('{"q":1}')).toBeNull();
+    expect(parseSummonPayload('["jn 3:16"]')).toBeNull();
+    expect(parseSummonPayload('{"q":"' + "x".repeat(MAX_SEARCH_CHARS + 1) + '"}')).toBeNull();
+    expect(parseSummonPayload("x".repeat(MAX_SUMMON_BYTES + 1))).toBeNull();
+    expect(parseSummonPayload('{"q":{"nested":true}}')).toBeNull();
   });
 });
 

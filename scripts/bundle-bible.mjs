@@ -40,6 +40,7 @@ await bundlePragmaLibrary({
     "selectedText",
     "serializeState",
     "parseState",
+    "parseSummonPayload",
     "stateMaxBytes",
     "isKnownBook"
   ]
