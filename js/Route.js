@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/omarchy-route-bible/src/route.ts. Do not edit by hand.
+// Generated from /workspace/src/route.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};

@@ -1,4 +1,4 @@
-// Generated from /home/dpshde/Developer/omarchy-route-bible/src/qml-api.ts. Do not edit by hand.
+// Generated from /workspace/src/qml-api.ts. Do not edit by hand.
 .pragma library
 function objectFromEntries(entries) {
   var obj = {};

@@ -758,27 +758,20 @@ Item {
 
   function scrollToFocus() {
     if (!verseList.count) return
-    var rows = root.usePublication ? root.pubRows : root.readerRows
-    var idx = -1
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i]
-      if (!row) continue
-      if (row.kind === "verse" && row.n === root.focusVerse) {
-        idx = i
-        break
-      }
-      if (row.parts && row.parts.length) {
-        for (var p = 0; p < row.parts.length; p++) {
-          if (row.parts[p] && row.parts[p].n === root.focusVerse) {
-            idx = i
-            break
-          }
-        }
-        if (idx >= 0) break
-      }
-    }
+    var idx = Bible.pubRowIndexForVerse(
+      root.usePublication ? root.pubRows : root.readerRows,
+      root.focusVerse
+    )
     if (idx < 0) return
     verseList.positionViewAtIndex(idx, ListView.Contain)
+  }
+
+  function verseSelected(n) {
+    return Bible.verseSelected(n, root.startVerse, root.endVerse, root.searchActive)
+  }
+
+  function verseHovered(n) {
+    return Bible.verseHovered(n, root.focusVerse, root.startVerse, root.endVerse, root.searchActive)
   }
 
   function verseAtRow(idx) {
@@ -1191,10 +1184,13 @@ Item {
           readonly property bool joinNext: !!modelData.joinNext
           readonly property int fillVerse: Math.floor(Number(modelData.fillVerse) || 0)
           readonly property var parts: modelData.parts || []
+          readonly property var blockVerseNums: Bible.uniqueBlockVerses(modelData)
+          readonly property bool perVerseHighlight: blockDelegate.isFlow && blockVerseNums.length > 1
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
           readonly property bool selected: {
+            if (perVerseHighlight) return false
             if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
             var lo = Math.min(root.startVerse, root.endVerse)
             var hi = Math.max(root.startVerse, root.endVerse)
@@ -1208,6 +1204,7 @@ Item {
             return false
           }
           readonly property bool hovered: {
+            if (perVerseHighlight) return false
             if (root.searchActive || selected) return false
             if (fillVerse >= 1) return fillVerse === root.focusVerse
             if (isVerse) return verseNum === root.focusVerse
@@ -1378,11 +1375,30 @@ Item {
                 required property int index
                 readonly property int n: Math.floor(Number(modelData.n) || 0)
                 readonly property bool showNum: !!modelData.showNum
+                readonly property bool runSelected: root.verseSelected(run.n)
+                readonly property bool runHovered: root.verseHovered(run.n)
                 readonly property int numGap: showNum ? Style.space(4) : 0
                 readonly property int numW: showNum ? Math.ceil(numLabel.implicitWidth) + numGap : 0
                 readonly property int bodyW: Math.min(Math.ceil(bodyMetrics.implicitWidth), Math.max(1, flow.width - numW))
                 width: numW + bodyW
                 height: Math.max(showNum ? numLabel.implicitHeight : 0, runText.implicitHeight)
+
+                Rectangle {
+                  visible: blockDelegate.perVerseHighlight && (run.runSelected || run.runHovered)
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: run.runSelected ? root.selectionFill : root.hoverFill
+                }
+
+                Rectangle {
+                  visible: run.runHovered
+                  width: Math.max(2, Style.space(2))
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  radius: width
+                  color: root.accent
+                }
 
                 Text {
                   id: bodyMetrics
@@ -1400,8 +1416,8 @@ Item {
                   visible: run.showNum
                   text: String(run.n)
                   textFormat: Text.PlainText
-                  color: blockDelegate.selected ? root.selectedTextColor : root.muted
-                  opacity: blockDelegate.selected ? 1 : 0.4
+                  color: run.runSelected ? root.selectedTextColor : root.muted
+                  opacity: run.runSelected ? 1 : 0.4
                   font.family: root.fontFamily
                   font.pixelSize: Math.max(8, Math.round(Style.font.bodySmall * 0.7))
                   font.weight: Font.Normal
@@ -1417,9 +1433,9 @@ Item {
                   wrapMode: Text.WordWrap
                   text: String(run.modelData.t || "")
                   textFormat: Text.PlainText
-                  color: blockDelegate.selected
+                  color: run.runSelected
                     ? root.selectedTextColor
-                    : (blockDelegate.hovered || run.modelData.wj ? root.accent : root.foreground)
+                    : (run.runHovered || run.modelData.wj ? root.accent : root.foreground)
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
                   font.italic: blockDelegate.kind === "d"
