@@ -490,17 +490,94 @@ export function verseInRange(verse: number, startVerse: number, endVerse: number
   return n >= start && n <= end;
 }
 
+function listLength(value: unknown): number {
+  if (!value || typeof value !== "object") return 0;
+  const length = (value as { length?: unknown }).length;
+  return typeof length === "number" && Number.isFinite(length) && length >= 0 ? length : 0;
+}
+
+function partVerseNumber(part: unknown): number {
+  if (!part || typeof part !== "object") return 0;
+  return Math.floor(Number((part as { n?: unknown }).n) || 0);
+}
+
+function eachPart(parts: unknown, visit: (part: unknown) => void): void {
+  const len = listLength(parts);
+  for (let i = 0; i < len; i++) {
+    const part = (parts as Record<number, unknown>)[i];
+    if (part) visit(part);
+  }
+}
+
 export function uniqueBlockVerses(block: Pick<PubBlock, "parts" | "kind">): number[] {
   const seen = new Set<number>();
-  for (const part of block.parts || []) {
-    const n = Math.floor(Number(part.n) || 0);
+  eachPart(block.parts, (part) => {
+    const n = partVerseNumber(part);
     if (n >= 1) seen.add(n);
-  }
+  });
   return [...seen].sort((a, b) => a - b);
 }
 
 export function pubBlockUsesPerVerseHighlight(block: PubBlock): boolean {
   return FLOW_KINDS.has(block.kind) && uniqueBlockVerses(block).length > 1;
+}
+
+export function readerBlockSelected(
+  block: PubBlock,
+  startVerse: number,
+  endVerse: number
+): boolean {
+  if (pubBlockUsesPerVerseHighlight(block)) return false;
+  if (!hasVerseSelection(startVerse, endVerse)) return false;
+  const lo = Math.min(startVerse, endVerse);
+  const hi = Math.max(startVerse, endVerse);
+  const fillVerse = Math.floor(Number(block.fillVerse) || 0);
+  if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi;
+  if (block.kind === "verse") {
+    const verseNum = Math.floor(Number((block as { n?: unknown }).n) || 0);
+    return verseNum >= lo && verseNum <= hi;
+  }
+  if (!FLOW_KINDS.has(block.kind)) return false;
+  let hit = false;
+  eachPart(block.parts, (part) => {
+    const n = partVerseNumber(part);
+    if (n >= lo && n <= hi) hit = true;
+  });
+  return hit;
+}
+
+export type UsfmHighlightState = {
+  mode: "block" | "per-run";
+  selected: number[];
+  hovered: number[];
+};
+
+export function usfmHighlightState(
+  block: PubBlock,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): UsfmHighlightState {
+  const verses = uniqueBlockVerses(block);
+  const perRun = pubBlockUsesPerVerseHighlight(block);
+  if (perRun) {
+    return {
+      mode: "per-run",
+      selected: verses.filter((n) => verseSelected(n, startVerse, endVerse, searchActive)),
+      hovered: verses.filter((n) => verseHovered(n, focusVerse, startVerse, endVerse, searchActive))
+    };
+  }
+  const hasSel = hasVerseSelection(startVerse, endVerse);
+  if (hasSel) {
+    const { start, end } = orderedRange(startVerse, endVerse);
+    const blockSelected = verses.some((n) => n >= start && n <= end);
+    return { mode: "block", selected: blockSelected ? verses : [], hovered: [] };
+  }
+  if (searchActive) return { mode: "block", selected: [], hovered: [] };
+  const focus = Math.floor(Number(focusVerse) || 0);
+  const blockHovered = verses.includes(focus);
+  return { mode: "block", selected: [], hovered: blockHovered ? verses : [] };
 }
 
 export function verseSelected(
@@ -537,9 +614,11 @@ export function pubRowIndexForVerse(
     if (!row) continue;
     if (row.kind === "verse" && "n" in row && row.n === n) return i;
     const parts = "parts" in row ? row.parts : undefined;
-    for (const part of parts || []) {
-      if (Math.floor(Number(part.n) || 0) === n) return i;
-    }
+    let matched = false;
+    eachPart(parts, (part) => {
+      if (!matched && partVerseNumber(part) === n) matched = true;
+    });
+    if (matched) return i;
     if ("fillVerse" in row && row.fillVerse === n) return i;
   }
   return -1;

@@ -15,12 +15,14 @@ import {
   pubBlockUsesPerVerseHighlight,
   pubBlocks,
   pubRowIndexForVerse,
+  readerBlockSelected,
   readerBlocks,
   selectedText,
   serializeState,
   splitRefs,
   toCanonical,
   uniqueBlockVerses,
+  usfmHighlightState,
   verseHovered,
   verseInRange,
   verseSelected
@@ -284,6 +286,49 @@ describe("parseIndex", () => {
 describe("USFM keyboard verse navigation", () => {
   const john1 = pubBlocks(pub as Record<string, import("../src/bible").PubBlock[]>, "JHN", 1);
 
+  function qmlLikeParts<T extends { n: number }>(parts: T[]): { length: number } & Record<number, T> {
+    const out = { length: parts.length } as { length: number } & Record<number, T>;
+    for (let i = 0; i < parts.length; i++) out[i] = parts[i];
+    return out;
+  }
+
+  function withQmlParts(block: import("../src/bible").PubBlock): import("../src/bible").PubBlock {
+    return { ...block, parts: qmlLikeParts(block.parts) as unknown as import("../src/bible").PubBlock["parts"] };
+  }
+
+  it("reads verse numbers from QML array-like parts", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const qmlOpening = withQmlParts(opening);
+    expect(uniqueBlockVerses(qmlOpening)).toEqual([1, 2, 3, 4, 5]);
+    expect(pubBlockUsesPerVerseHighlight(qmlOpening)).toBe(true);
+  });
+
+  it("highlights exactly one John 1 verse on initial keyboard focus", () => {
+    const opening = withQmlParts(
+      john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!
+    );
+    const initial = usfmHighlightState(opening, 1, 0, 0, false);
+    expect(initial.mode).toBe("per-run");
+    expect(initial.selected).toEqual([]);
+    expect(initial.hovered).toEqual([1]);
+
+    const focused = usfmHighlightState(opening, 3, 0, 0, false);
+    expect(focused.hovered).toEqual([3]);
+    expect(focused.selected).toEqual([]);
+  });
+
+  it("does not use block-level selection for a single selected verse in a shared paragraph", () => {
+    const opening = withQmlParts(
+      john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!
+    );
+    const single = usfmHighlightState(opening, 1, 1, 1, false);
+    expect(single.mode).toBe("per-run");
+    expect(single.selected).toEqual([1]);
+    expect(single.selected.length).toBe(1);
+    expect(readerBlockSelected(opening, 1, 1)).toBe(false);
+    expect(readerBlockSelected(opening, 2, 4)).toBe(false);
+  });
+
   it("marks multi-verse John 1 paragraphs for per-verse highlighting", () => {
     const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1));
     expect(opening).toBeTruthy();
@@ -328,6 +373,16 @@ describe("USFM keyboard verse navigation", () => {
       const highlighted = verses.filter((n) => verseSelected(n, selected, selected, false));
       expect(highlighted).toEqual([selected]);
     }
+  });
+
+  it("finds verse rows when publication blocks use QML array-like parts", () => {
+    const qmlRows = john1.map((row) => withQmlParts(row));
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const rowIndex = john1.indexOf(opening);
+    expect(pubRowIndexForVerse(qmlRows, 1)).toBe(rowIndex);
+    expect(pubRowIndexForVerse(qmlRows, 3)).toBe(rowIndex);
+    expect(pubRowIndexForVerse(qmlRows, 5)).toBe(rowIndex);
+    expect(pubRowIndexForVerse(qmlRows, 6)).not.toBe(rowIndex);
   });
 
   it("keeps scroll target stable while focus moves within the same paragraph", () => {
