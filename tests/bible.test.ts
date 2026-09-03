@@ -14,6 +14,8 @@ import {
   prevChapter,
   pubBlockUsesPerVerseHighlight,
   pubBlocks,
+  pubFlowHighlight,
+  pubFlowUsesPerRunFill,
   pubRowIndexForVerse,
   readerBlockSelected,
   readerBlocks,
@@ -327,6 +329,43 @@ describe("USFM keyboard verse navigation", () => {
     expect(single.selected.length).toBe(1);
     expect(readerBlockSelected(opening, 1, 1)).toBe(false);
     expect(readerBlockSelected(opening, 2, 4)).toBe(false);
+  });
+
+  it("uses per-run fill for the John 1 opening even when uniqueBlockVerses is empty", () => {
+    const opening = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(1))!;
+    const emptied = { ...opening, parts: [] };
+    expect(uniqueBlockVerses(emptied)).toEqual([]);
+    expect(pubFlowUsesPerRunFill(emptied.kind)).toBe(true);
+    expect(pubBlockUsesPerVerseHighlight(emptied)).toBe(true);
+    expect(readerBlockSelected(emptied, 1, 1)).toBe(false);
+    expect(usfmHighlightState(emptied, 1, 1, 1, false).mode).toBe("per-run");
+
+    const verse1 = pubFlowHighlight(emptied.kind, 1, 1, 1, 1, false);
+    expect(verse1.useBlockFill).toBe(false);
+    expect(verse1.usePerRunFill).toBe(true);
+    expect(verse1.runSelected).toBe(true);
+
+    for (const n of [2, 3, 4, 5]) {
+      const paint = pubFlowHighlight(emptied.kind, n, 1, 1, 1, false);
+      expect(paint.useBlockFill).toBe(false);
+      expect(paint.usePerRunFill).toBe(false);
+    }
+
+    const focused = pubFlowHighlight(emptied.kind, 3, 3, 0, 0, false);
+    expect(focused.useBlockFill).toBe(false);
+    expect(focused.usePerRunFill).toBe(true);
+    expect(focused.runHovered).toBe(true);
+  });
+
+  it("keeps a single-verse publication paragraph on per-run fill", () => {
+    const flesh = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).join() === "14");
+    expect(flesh).toBeTruthy();
+    expect(pubFlowUsesPerRunFill(flesh!.kind)).toBe(true);
+    expect(pubBlockUsesPerVerseHighlight(flesh!)).toBe(true);
+    expect(readerBlockSelected(flesh!, 14, 14)).toBe(false);
+    const paint = pubFlowHighlight(flesh!.kind, 14, 14, 14, 14, false);
+    expect(paint.useBlockFill).toBe(false);
+    expect(paint.usePerRunFill).toBe(true);
   });
 
   it("marks multi-verse John 1 paragraphs for per-verse highlighting", () => {

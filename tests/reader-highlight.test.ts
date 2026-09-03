@@ -2,43 +2,16 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { pubBlocks, uniqueBlockVerses } from "../src/bible";
+import {
+  pubBlocks,
+  pubFlowHighlight,
+  pubFlowUsesPerRunFill,
+  readerBlockSelected,
+  uniqueBlockVerses
+} from "../src/bible";
 import pub from "../data/pub.json";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-type PartLike = { n?: unknown };
-
-function qmlUniqueVerseCount(parts: PartLike[]): number {
-  const seen: Record<string, boolean> = {};
-  let c = 0;
-  for (let i = 0; i < parts.length; i++) {
-    const n = Math.floor(Number(parts[i].n) || 0);
-    if (n >= 1 && !seen[n]) {
-      seen[n] = true;
-      c++;
-    }
-  }
-  return c;
-}
-
-function oldBlockAnyPartSelected(
-  parts: PartLike[],
-  uniqueFromJs: number[],
-  startVerse: number,
-  endVerse: number
-): boolean {
-  const perVerseHighlight = uniqueFromJs.length > 1;
-  if (perVerseHighlight) return false;
-  if (!(startVerse >= 1 && endVerse >= 1)) return false;
-  const lo = Math.min(startVerse, endVerse);
-  const hi = Math.max(startVerse, endVerse);
-  for (let i = 0; i < parts.length; i++) {
-    const n = Number(parts[i].n);
-    if (n >= lo && n <= hi) return true;
-  }
-  return false;
-}
 
 describe("Reader USFM highlight bindings", () => {
   const reader = readFileSync(join(repoRoot, "Reader.qml"), "utf8");
@@ -52,47 +25,68 @@ describe("Reader USFM highlight bindings", () => {
     expect(bibleJs).not.toMatch(/for \(const part of block\.parts/);
   });
 
-  it("does not leave the whole paragraph selected when per-verse highlight is on", () => {
-    expect(reader).toContain("if (perVerseHighlight) return false");
-    expect(reader).toContain("blockDelegate.isFlow && !blockDelegate.perVerseHighlight");
+  it("shares the flow fill decision with QML and never block-fills flow rows", () => {
+    expect(reader).toContain("Bible.pubFlowUsesPerRunFill(kind)");
+    expect(reader).toMatch(/if \(isFlow\) return false/);
+    expect(reader).not.toMatch(/uniqueVerseCount/);
+    expect(reader).not.toContain("isFlow && !blockDelegate.perVerseHighlight");
+    expect(reader).not.toContain("isFlow && uniqueVerseCount > 1");
+    expect(reader).toContain("blockDelegate.perVerseHighlight && (run.runSelected || run.runHovered)");
     expect(reader).toContain("Bible.verseSelected(run.n, sv, ev, sa)");
     expect(reader).toContain("Bible.verseHovered(run.n, fv, sv, ev, sa)");
+    expect(bibleJs).toContain("function pubFlowUsesPerRunFill(kind)");
+    expect(bibleJs).toContain("function pubFlowHighlight(");
   });
 
-  it("computes uniqueVerseCount in QML and does not gate painting on uniqueBlockVerses", () => {
-    expect(reader).toMatch(/readonly property int uniqueVerseCount:/);
-    expect(reader).toContain("for (var i = 0; i < parts.length; i++)");
-    expect(reader).toMatch(/readonly property bool perVerseHighlight: isFlow && uniqueVerseCount > 1/);
-    expect(reader).not.toMatch(/Bible\.uniqueBlockVerses/);
-    expect(reader).not.toMatch(/blockVerseNums/);
-    expect(bibleJs).toContain("function uniqueBlockVerses(block)");
-  });
-
-  it("documents that empty uniqueBlockVerses plus the old any-part loop selected the whole John 1 opening para", () => {
+  it("paints only John 1:1 when verse 1 is selected in the opening paragraph", () => {
     expect(opening).toBeTruthy();
-    expect(uniqueBlockVerses(opening)).toEqual([1, 2, 3, 4, 5]);
-    expect(opening.parts.length).toBeGreaterThan(1);
+    expect(opening.kind).toBe("para");
+    expect(opening.parts.map((part) => part.n)).toEqual([1, 2, 3, 4, 5]);
+    expect(opening.fillVerse || 0).toBe(0);
+    expect(pubFlowUsesPerRunFill(opening.kind)).toBe(true);
+    expect(readerBlockSelected(opening, 1, 1)).toBe(false);
 
-    const jsReturnedEmpty: number[] = [];
-    expect(jsReturnedEmpty.length > 1).toBe(false);
-    expect(oldBlockAnyPartSelected(opening.parts, jsReturnedEmpty, 1, 1)).toBe(true);
-
-    const uniqueVerseCount = qmlUniqueVerseCount(opening.parts);
-    expect(uniqueVerseCount).toBe(5);
-    const isFlow = opening.kind === "para";
-    const perVerseHighlight = isFlow && uniqueVerseCount > 1;
-    expect(isFlow).toBe(true);
-    expect(perVerseHighlight).toBe(true);
-    expect(perVerseHighlight ? false : oldBlockAnyPartSelected(opening.parts, [1], 1, 1)).toBe(false);
-
-    expect(reader).not.toMatch(/Bible\.uniqueBlockVerses/);
-    expect(reader).toMatch(/readonly property bool perVerseHighlight: isFlow && uniqueVerseCount > 1/);
+    const painted = opening.parts.map((part) => pubFlowHighlight(opening.kind, part.n, 1, 1, 1, false));
+    expect(painted.map((row) => row.useBlockFill)).toEqual([false, false, false, false, false]);
+    expect(painted.map((row) => row.usePerRunFill)).toEqual([true, false, false, false, false]);
+    expect(painted.map((row) => row.runSelected)).toEqual([true, false, false, false, false]);
   });
 
-  it("counts unique verses from indexed parts the way Reader.qml does", () => {
-    expect(qmlUniqueVerseCount(opening.parts)).toBe(5);
-    expect(qmlUniqueVerseCount([{ n: 1 }, { n: 1 }, { n: 2 }])).toBe(2);
-    expect(qmlUniqueVerseCount([{ n: 3 }])).toBe(1);
-    expect(qmlUniqueVerseCount([])).toBe(0);
+  it("moves the per-run highlight one verse at a time through John 1:1–5", () => {
+    const steps = [1, 2, 3, 4, 5].map((focus) =>
+      opening.parts.map((part) => pubFlowHighlight(opening.kind, part.n, focus, 0, 0, false).usePerRunFill)
+    );
+    expect(steps).toEqual([
+      [true, false, false, false, false],
+      [false, true, false, false, false],
+      [false, false, true, false, false],
+      [false, false, false, true, false],
+      [false, false, false, false, true]
+    ]);
+    const nextPara = john1.find((row) => row.kind === "para" && uniqueBlockVerses(row).includes(6))!;
+    const after = pubFlowHighlight(nextPara.kind, 6, 6, 0, 0, false);
+    expect(after.useBlockFill).toBe(false);
+    expect(after.usePerRunFill).toBe(true);
+    expect(pubFlowHighlight(opening.kind, 5, 6, 0, 0, false).usePerRunFill).toBe(false);
+  });
+
+  it("keeps shift range selection on the matching runs only", () => {
+    const painted = opening.parts.map((part) => pubFlowHighlight(opening.kind, part.n, 4, 2, 4, false));
+    expect(painted.map((row) => row.useBlockFill)).toEqual([false, false, false, false, false]);
+    expect(painted.map((row) => row.runSelected)).toEqual([false, true, true, true, false]);
+    expect(painted[0].runHovered).toBe(false);
+  });
+
+  it("does not fall back to block fill when uniqueBlockVerses returns no verses", () => {
+    const emptied = { ...opening, parts: [] };
+    expect(uniqueBlockVerses(emptied)).toEqual([]);
+    expect(pubFlowUsesPerRunFill(emptied.kind)).toBe(true);
+    expect(readerBlockSelected(emptied, 1, 1)).toBe(false);
+    expect(pubFlowHighlight(emptied.kind, 1, 1, 1, 1, false)).toMatchObject({
+      useBlockFill: false,
+      usePerRunFill: true,
+      runSelected: true
+    });
+    expect(pubFlowHighlight(emptied.kind, 5, 1, 1, 1, false).usePerRunFill).toBe(false);
   });
 });

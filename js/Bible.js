@@ -95,6 +95,8 @@ var BibleApi = (function() {
     prevChapter: () => prevChapter,
     pubBlockUsesPerVerseHighlight: () => pubBlockUsesPerVerseHighlight,
     pubBlocks: () => pubBlocks,
+    pubFlowHighlight: () => pubFlowHighlight,
+    pubFlowUsesPerRunFill: () => pubFlowUsesPerRunFill,
     pubRowIndexForVerse: () => pubRowIndexForVerse,
     readerBlockSelected: () => readerBlockSelected,
     readerBlocks: () => readerBlocks,
@@ -1007,11 +1009,26 @@ var BibleApi = (function() {
     });
     return [...seen].sort((a, b) => a - b);
   }
+  function pubFlowUsesPerRunFill(kind) {
+    return FLOW_KINDS.has(String(kind || ""));
+  }
   function pubBlockUsesPerVerseHighlight(block) {
-    return FLOW_KINDS.has(block.kind) && uniqueBlockVerses(block).length > 1;
+    return pubFlowUsesPerRunFill(block.kind);
+  }
+  function pubFlowHighlight(kind, runVerse, focusVerse, startVerse, endVerse, searchActive = false) {
+    const usePerRun = pubFlowUsesPerRunFill(kind);
+    const n = Math.floor(Number(runVerse) || 0);
+    const runSelected = verseSelected(n, startVerse, endVerse, searchActive);
+    const runHovered = verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
+    return {
+      useBlockFill: !usePerRun,
+      usePerRunFill: usePerRun && (runSelected || runHovered),
+      runSelected,
+      runHovered
+    };
   }
   function readerBlockSelected(block, startVerse, endVerse) {
-    if (pubBlockUsesPerVerseHighlight(block)) return false;
+    if (pubFlowUsesPerRunFill(block.kind)) return false;
     if (!hasVerseSelection(startVerse, endVerse)) return false;
     const lo = Math.min(startVerse, endVerse);
     const hi = Math.max(startVerse, endVerse);
@@ -1021,17 +1038,11 @@ var BibleApi = (function() {
       const verseNum = Math.floor(Number(block.n) || 0);
       return verseNum >= lo && verseNum <= hi;
     }
-    if (!FLOW_KINDS.has(block.kind)) return false;
-    let hit = false;
-    eachPart(block.parts, (part) => {
-      const n = partVerseNumber(part);
-      if (n >= lo && n <= hi) hit = true;
-    });
-    return hit;
+    return false;
   }
   function usfmHighlightState(block, focusVerse, startVerse, endVerse, searchActive = false) {
     const verses = uniqueBlockVerses(block);
-    const perRun = pubBlockUsesPerVerseHighlight(block);
+    const perRun = pubFlowUsesPerRunFill(block.kind);
     if (perRun) {
       return {
         mode: "per-run",
@@ -1288,6 +1299,8 @@ function clampVerse() { return BibleApi.clampVerse.apply(null, arguments); }
 function orderedRange() { return BibleApi.orderedRange.apply(null, arguments); }
 function verseInRange() { return BibleApi.verseInRange.apply(null, arguments); }
 function uniqueBlockVerses() { return BibleApi.uniqueBlockVerses.apply(null, arguments); }
+function pubFlowUsesPerRunFill() { return BibleApi.pubFlowUsesPerRunFill.apply(null, arguments); }
+function pubFlowHighlight() { return BibleApi.pubFlowHighlight.apply(null, arguments); }
 function pubBlockUsesPerVerseHighlight() { return BibleApi.pubBlockUsesPerVerseHighlight.apply(null, arguments); }
 function readerBlockSelected() { return BibleApi.readerBlockSelected.apply(null, arguments); }
 function usfmHighlightState() { return BibleApi.usfmHighlightState.apply(null, arguments); }

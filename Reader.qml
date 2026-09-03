@@ -1202,45 +1202,24 @@ Item {
           readonly property bool joinNext: !!modelData.joinNext
           readonly property int fillVerse: Math.floor(Number(modelData.fillVerse) || 0)
           readonly property var parts: modelData.parts || []
-          readonly property int uniqueVerseCount: {
-            var seen = {}
-            var c = 0
-            for (var i = 0; i < parts.length; i++) {
-              var n = Math.floor(Number(parts[i].n) || 0)
-              if (n >= 1 && !seen[n]) {
-                seen[n] = true
-                c++
-              }
-            }
-            return c
-          }
-          readonly property bool perVerseHighlight: isFlow && uniqueVerseCount > 1
+          readonly property bool perVerseHighlight: isFlow || Bible.pubFlowUsesPerRunFill(kind)
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
           readonly property bool selected: {
-            if (perVerseHighlight) return false
+            if (isFlow) return false
             if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
             var lo = Math.min(root.startVerse, root.endVerse)
             var hi = Math.max(root.startVerse, root.endVerse)
             if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi
             if (isVerse) return verseNum >= lo && verseNum <= hi
-            if (!isFlow) return false
-            for (var i = 0; i < parts.length; i++) {
-              var n = Number(parts[i].n)
-              if (n >= lo && n <= hi) return true
-            }
             return false
           }
           readonly property bool hovered: {
-            if (perVerseHighlight) return false
+            if (isFlow) return false
             if (root.searchActive || selected) return false
             if (fillVerse >= 1) return fillVerse === root.focusVerse
             if (isVerse) return verseNum === root.focusVerse
-            if (!isFlow) return false
-            for (var i = 0; i < parts.length; i++) {
-              if (Number(parts[i].n) === root.focusVerse) return true
-            }
             return false
           }
           readonly property int topPad: {
@@ -1268,7 +1247,6 @@ Item {
 
           Rectangle {
             visible: blockDelegate.isVerse
-              || (blockDelegate.isFlow && !blockDelegate.perVerseHighlight)
               || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
             anchors.fill: parent
             radius: root.usePublication && (isFlow || kind === "blank") ? 0 : Style.cornerRadius
