@@ -9,6 +9,7 @@ import {
   tryParseAnyPassage,
   type ParsedPassage
 } from "grab-bcv";
+import { MAX_PARSE_CHARS } from "./limits";
 
 export type PlainPassage = {
   input: string;
@@ -47,7 +48,11 @@ export function plainPassage(parsed: ParsedPassage): PlainPassage {
 }
 
 export function tryParse(input: string): ParseResult {
-  const result = tryParseAnyPassage(String(input || ""));
+  const raw = String(input || "");
+  if (raw.length > MAX_PARSE_CHARS) {
+    return { ok: false, message: "Reference is too long.", code: "TOO_LONG" };
+  }
+  const result = tryParseAnyPassage(raw);
   if (!result.ok) {
     return {
       ok: false,
@@ -84,6 +89,7 @@ function hasExactBookName(input: string): boolean {
 export function suggest(input: string, limit: number) {
   const cap = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 20) : 8;
   const raw = String(input || "");
+  if (raw.length > MAX_PARSE_CHARS) return [];
   if (hasExactBookName(raw)) return [];
   return autocompletePassage(raw, { limit: cap })
     .filter((item) => item.kind === "book")
@@ -98,7 +104,7 @@ export function suggest(input: string, limit: number) {
 
 export function typingHint(input: string): string {
   const trimmed = String(input || "").trim();
-  if (!trimmed) return "";
+  if (!trimmed || trimmed.length > MAX_PARSE_CHARS) return "";
 
   const verseMatch = trimmed.match(/^(.+?)\s+(\d+)\s*:\s*(\d*)(?:-(\d*))?$/);
   if (verseMatch) {

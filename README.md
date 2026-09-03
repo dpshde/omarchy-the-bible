@@ -16,23 +16,13 @@ This plugin runs inside the existing Omarchy shell process. It does not start a 
 
 ## Install
 
+Listing install uses the committed `data/` and `js/` files and does not run Node.
+
 ```sh
 omarchy plugin add https://github.com/dpshde/omarchy-the-bible.git --enable
-omarchy bar move io.github.dpshde.the-bible --section right
 ```
 
-Or from a local checkout:
-
-```sh
-pnpm install
-pnpm fetch-bsb
-pnpm build
-pnpm install:local
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.dpshde.the-bible
-omarchy plugin enable io.github.dpshde.the-bible --section right
-```
-
-`install:local` copies files (no symlinks — Omarchy forbids them in plugin folders).
+To rebuild bundled data from a checkout, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Usage
 
@@ -82,4 +72,4 @@ Runtime:
 - Opens [route.bible](https://route.bible) and [margin.bible](https://margin.bible) with `omarchy launch browser` when you ask it to.
 - Copies text and URLs with `wl-copy`.
 
-Build-time only (`pnpm` / Node): `grab-bcv`, `esbuild`, TypeScript, Vitest, oxlint. Marketplace install uses the committed `js/` and `data/` files and does not need Node.
+Build-time only (`pnpm` / Node): `grab-bcv`, `esbuild`, TypeScript, Vitest, oxlint. Marketplace install uses the committed `js/` and `data/` files and does not need Node. See [CONTRIBUTING.md](CONTRIBUTING.md) for the developer rebuild.

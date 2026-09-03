@@ -2,6 +2,10 @@ export const MAX_INDEX_BYTES = 6_000_000;
 export const MAX_PUB_BYTES = 16_000_000;
 export const MAX_USJ_BYTES = 8_000_000;
 export const MAX_STATE_BYTES = 2048;
+export const MAX_SEARCH_CHARS = 512;
+export const MAX_PARSE_CHARS = 2048;
+export const MAX_SUMMON_BYTES = 1024;
+export const MAX_JSON_DEPTH_SUMMON = 2;
 
 export const MAX_CHAPTER_KEYS = 1300;
 export const MIN_CHAPTER_KEYS = 1000;

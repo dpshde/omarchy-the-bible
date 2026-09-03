@@ -1972,6 +1972,9 @@ var GrabBcvApi = (function() {
     return tryParseSingleAnyPassage(input);
   }
 
+  // src/limits.ts
+  var MAX_PARSE_CHARS = 2048;
+
   // src/qml-api.ts
   function verseOrZero(value) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -1991,7 +1994,11 @@ var GrabBcvApi = (function() {
     };
   }
   function tryParse(input) {
-    const result = tryParseAnyPassage(String(input || ""));
+    const raw = String(input || "");
+    if (raw.length > MAX_PARSE_CHARS) {
+      return { ok: false, message: "Reference is too long.", code: "TOO_LONG" };
+    }
+    const result = tryParseAnyPassage(raw);
     if (!result.ok) {
       return {
         ok: false,
@@ -2020,6 +2027,7 @@ var GrabBcvApi = (function() {
   function suggest(input, limit) {
     const cap = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 20) : 8;
     const raw = String(input || "");
+    if (raw.length > MAX_PARSE_CHARS) return [];
     if (hasExactBookName(raw)) return [];
     return autocompletePassage(raw, { limit: cap }).filter((item) => item.kind === "book").map((item) => ({
       label: item.label,
@@ -2032,7 +2040,7 @@ var GrabBcvApi = (function() {
   function typingHint(input) {
     var _a, _b, _c, _d;
     const trimmed = String(input || "").trim();
-    if (!trimmed) return "";
+    if (!trimmed || trimmed.length > MAX_PARSE_CHARS) return "";
     const verseMatch = trimmed.match(/^(.+?)\s+(\d+)\s*:\s*(\d*)(?:-(\d*))?$/);
     if (verseMatch) {
       const book2 = resolveBook((_a = verseMatch[1]) != null ? _a : "");

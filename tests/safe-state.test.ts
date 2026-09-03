@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, symlinkSync, chmodSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, symlinkSync, chmodSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,37 @@ describe("safe-state.py", () => {
     chmodSync(path, 0o600);
     writeFileSync(path, "x".repeat(3000));
     expect(run(["read", path, "2048"]).status).not.toBe(0);
+  });
+
+  it("rejects symlinked parent directories on write", () => {
+    const base = mkdtempSync(join(tmpdir(), "route-state-"));
+    const evil = mkdtempSync(join(tmpdir(), "route-evil-"));
+    symlinkSync(evil, join(base, ".local"));
+    const path = join(base, ".local", "state", "omarchy", "settings", "route-bible.json");
+    const payload = '{"book":"JHN","chapter":3,"startVerse":16,"endVerse":16,"publication":false}';
+    expect(run(["write", path, "2048"], { env: { ROUTE_BIBLE_STATE: payload } }).status).not.toBe(0);
+
+    const rooted = mkdtempSync(join(tmpdir(), "route-state-"));
+    mkdirSync(join(rooted, ".local"), { mode: 0o700 });
+    symlinkSync(evil, join(rooted, ".local", "state"));
+    const nested = join(rooted, ".local", "state", "omarchy", "settings", "route-bible.json");
+    expect(run(["write", nested, "2048"], { env: { ROUTE_BIBLE_STATE: payload } }).status).not.toBe(0);
+  });
+
+  it("creates missing parents safely and rejects world-writable parents", () => {
+    const base = mkdtempSync(join(tmpdir(), "route-state-"));
+    const path = join(base, ".local", "state", "omarchy", "settings", "route-bible.json");
+    const payload = '{"book":"JHN","chapter":3,"startVerse":16,"endVerse":16,"publication":false}';
+    expect(run(["write", path, "2048"], { env: { ROUTE_BIBLE_STATE: payload } }).status).toBe(0);
+    expect(readFileSync(path, "utf8")).toBe(payload);
+
+    const bad = mkdtempSync(join(tmpdir(), "route-state-"));
+    mkdirSync(join(bad, ".local", "state", "omarchy"), { recursive: true, mode: 0o700 });
+    const settings = join(bad, ".local", "state", "omarchy", "settings");
+    mkdirSync(settings, { mode: 0o700 });
+    chmodSync(settings, 0o777);
+    const blocked = join(settings, "route-bible.json");
+    expect(run(["write", blocked, "2048"], { env: { ROUTE_BIBLE_STATE: payload } }).status).not.toBe(0);
   });
 
   it("writes through O_NOFOLLOW replace and chmod 600", () => {
