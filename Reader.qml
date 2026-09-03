@@ -1202,8 +1202,19 @@ Item {
           readonly property bool joinNext: !!modelData.joinNext
           readonly property int fillVerse: Math.floor(Number(modelData.fillVerse) || 0)
           readonly property var parts: modelData.parts || []
-          readonly property var blockVerseNums: Bible.uniqueBlockVerses({ kind: kind, parts: parts })
-          readonly property bool perVerseHighlight: blockDelegate.isFlow && blockVerseNums.length > 1
+          readonly property int uniqueVerseCount: {
+            var seen = {}
+            var c = 0
+            for (var i = 0; i < parts.length; i++) {
+              var n = Math.floor(Number(parts[i].n) || 0)
+              if (n >= 1 && !seen[n]) {
+                seen[n] = true
+                c++
+              }
+            }
+            return c
+          }
+          readonly property bool perVerseHighlight: isFlow && uniqueVerseCount > 1
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
