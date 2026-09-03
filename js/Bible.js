@@ -95,9 +95,15 @@ var BibleApi = (function() {
     prevChapter: () => prevChapter,
     pubBlockUsesPerVerseHighlight: () => pubBlockUsesPerVerseHighlight,
     pubBlocks: () => pubBlocks,
+    pubChapterPaint: () => pubChapterPaint,
     pubFlowHighlight: () => pubFlowHighlight,
     pubFlowUsesPerRunFill: () => pubFlowUsesPerRunFill,
     pubRowIndexForVerse: () => pubRowIndexForVerse,
+    pubRowPaint: () => pubRowPaint,
+    readerBlockFill: () => readerBlockFill,
+    readerBlockFillHovered: () => readerBlockFillHovered,
+    readerBlockFillSelected: () => readerBlockFillSelected,
+    readerBlockFillShow: () => readerBlockFillShow,
     readerBlockSelected: () => readerBlockSelected,
     readerBlocks: () => readerBlocks,
     selectedText: () => selectedText,
@@ -1018,27 +1024,66 @@ var BibleApi = (function() {
   function pubFlowHighlight(kind, runVerse, focusVerse, startVerse, endVerse, searchActive = false) {
     const usePerRun = pubFlowUsesPerRunFill(kind);
     const n = Math.floor(Number(runVerse) || 0);
-    const runSelected = verseSelected(n, startVerse, endVerse, searchActive);
-    const runHovered = verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
+    const runSelected = n >= 1 && verseSelected(n, startVerse, endVerse, searchActive);
+    const runHovered = n >= 1 && verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
     return {
-      useBlockFill: !usePerRun,
+      useBlockFill: false,
       usePerRunFill: usePerRun && (runSelected || runHovered),
       runSelected,
       runHovered
     };
   }
-  function readerBlockSelected(block, startVerse, endVerse) {
-    if (pubFlowUsesPerRunFill(block.kind)) return false;
-    if (!hasVerseSelection(startVerse, endVerse)) return false;
-    const lo = Math.min(startVerse, endVerse);
-    const hi = Math.max(startVerse, endVerse);
-    const fillVerse = Math.floor(Number(block.fillVerse) || 0);
-    if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi;
-    if (block.kind === "verse") {
-      const verseNum = Math.floor(Number(block.n) || 0);
-      return verseNum >= lo && verseNum <= hi;
+  var BLOCK_FILL_KINDS = /* @__PURE__ */ new Set(["verse", "blank"]);
+  var NEVER_BLOCK_FILL_KINDS = /* @__PURE__ */ new Set(["heading", "subhead", "refs"]);
+  function readerBlockFill(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive = false) {
+    const none = { show: false, selected: false, hovered: false };
+    const k = String(kind || "");
+    if (pubFlowUsesPerRunFill(k) || NEVER_BLOCK_FILL_KINDS.has(k) || !BLOCK_FILL_KINDS.has(k)) {
+      return none;
     }
-    return false;
+    const n = k === "verse" ? Math.floor(Number(verseNum) || 0) : Math.floor(Number(fillVerse) || 0);
+    if (n < 1) return none;
+    const selected = verseSelected(n, startVerse, endVerse, searchActive);
+    const hovered = verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
+    return { show: selected || hovered, selected, hovered };
+  }
+  function readerBlockFillSelected(kind, fillVerse, verseNum, startVerse, endVerse, searchActive = false) {
+    return readerBlockFill(kind, fillVerse, verseNum, 0, startVerse, endVerse, searchActive).selected;
+  }
+  function readerBlockFillHovered(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive = false) {
+    return readerBlockFill(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive).hovered;
+  }
+  function readerBlockFillShow(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive = false) {
+    return readerBlockFill(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive).show;
+  }
+  function readerBlockSelected(block, startVerse, endVerse) {
+    const verseNum = Math.floor(Number(block.n) || 0);
+    return readerBlockFillSelected(block.kind, block.fillVerse, verseNum, startVerse, endVerse, false);
+  }
+  function pubRowPaint(block, focusVerse, startVerse, endVerse, searchActive = false) {
+    const fill = readerBlockFill(
+      block.kind,
+      block.fillVerse,
+      block.n,
+      focusVerse,
+      startVerse,
+      endVerse,
+      searchActive
+    );
+    const blockFill = fill.selected ? "selection" : fill.hovered ? "hover" : "none";
+    const runs = [];
+    eachPart(block.parts, (part) => {
+      const n = partVerseNumber(part);
+      const paint = pubFlowHighlight(block.kind, n, focusVerse, startVerse, endVerse, searchActive);
+      runs.push({
+        n,
+        fill: paint.usePerRunFill ? paint.runSelected ? "selection" : "hover" : "none"
+      });
+    });
+    return { kind: String(block.kind || ""), blockFill, runs };
+  }
+  function pubChapterPaint(rows, focusVerse, startVerse, endVerse, searchActive = false) {
+    return rows.map((row) => pubRowPaint(row, focusVerse, startVerse, endVerse, searchActive));
   }
   function usfmHighlightState(block, focusVerse, startVerse, endVerse, searchActive = false) {
     const verses = uniqueBlockVerses(block);
@@ -1302,7 +1347,13 @@ function uniqueBlockVerses() { return BibleApi.uniqueBlockVerses.apply(null, arg
 function pubFlowUsesPerRunFill() { return BibleApi.pubFlowUsesPerRunFill.apply(null, arguments); }
 function pubFlowHighlight() { return BibleApi.pubFlowHighlight.apply(null, arguments); }
 function pubBlockUsesPerVerseHighlight() { return BibleApi.pubBlockUsesPerVerseHighlight.apply(null, arguments); }
+function readerBlockFill() { return BibleApi.readerBlockFill.apply(null, arguments); }
+function readerBlockFillSelected() { return BibleApi.readerBlockFillSelected.apply(null, arguments); }
+function readerBlockFillHovered() { return BibleApi.readerBlockFillHovered.apply(null, arguments); }
+function readerBlockFillShow() { return BibleApi.readerBlockFillShow.apply(null, arguments); }
 function readerBlockSelected() { return BibleApi.readerBlockSelected.apply(null, arguments); }
+function pubRowPaint() { return BibleApi.pubRowPaint.apply(null, arguments); }
+function pubChapterPaint() { return BibleApi.pubChapterPaint.apply(null, arguments); }
 function usfmHighlightState() { return BibleApi.usfmHighlightState.apply(null, arguments); }
 function verseSelected() { return BibleApi.verseSelected.apply(null, arguments); }
 function verseHovered() { return BibleApi.verseHovered.apply(null, arguments); }

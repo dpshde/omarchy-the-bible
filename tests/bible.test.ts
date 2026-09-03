@@ -14,9 +14,11 @@ import {
   prevChapter,
   pubBlockUsesPerVerseHighlight,
   pubBlocks,
+  pubChapterPaint,
   pubFlowHighlight,
   pubFlowUsesPerRunFill,
   pubRowIndexForVerse,
+  readerBlockFill,
   readerBlockSelected,
   readerBlocks,
   selectedText,
@@ -442,5 +444,16 @@ describe("USFM keyboard verse navigation", () => {
     expect(verseInRange(1, 2, 4)).toBe(false);
     expect(verseHovered(3, 1, 2, 4, false)).toBe(false);
     expect(verseHovered(1, 1, 2, 4, false)).toBe(true);
+  });
+
+  it("never block-fills John 1 heading or refs even if fillVerse leaks a selected verse", () => {
+    const heading = john1.find((row) => row.kind === "heading" && row.text === "The Beginning")!;
+    const refs = john1.find((row) => row.kind === "refs" && /Genesis 1:1/.test(row.text))!;
+    expect(readerBlockFill(heading.kind, 1, 1, 1, 1, 1, false).show).toBe(false);
+    expect(readerBlockFill(refs.kind, 5, 0, 1, 1, 5, false).show).toBe(false);
+    expect(readerBlockSelected({ ...heading, fillVerse: 1 }, 1, 1)).toBe(false);
+    const painted = pubChapterPaint(john1, 1, 1, 1, false);
+    expect(painted.filter((row) => row.kind === "heading" || row.kind === "refs").every((row) => row.blockFill === "none")).toBe(true);
+    expect(painted.flatMap((row) => row.runs.filter((run) => run.fill === "selection").map((run) => run.n))).toEqual([1]);
   });
 });
