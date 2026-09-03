@@ -29,6 +29,8 @@ await bundlePragmaLibrary({
     "verseInRange",
     "uniqueBlockVerses",
     "pubBlockUsesPerVerseHighlight",
+    "readerBlockSelected",
+    "usfmHighlightState",
     "verseSelected",
     "verseHovered",
     "pubRowIndexForVerse",

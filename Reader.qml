@@ -1202,7 +1202,7 @@ Item {
           readonly property bool joinNext: !!modelData.joinNext
           readonly property int fillVerse: Math.floor(Number(modelData.fillVerse) || 0)
           readonly property var parts: modelData.parts || []
-          readonly property var blockVerseNums: Bible.uniqueBlockVerses(modelData)
+          readonly property var blockVerseNums: Bible.uniqueBlockVerses({ kind: kind, parts: parts })
           readonly property bool perVerseHighlight: blockDelegate.isFlow && blockVerseNums.length > 1
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
@@ -1256,7 +1256,9 @@ Item {
           }
 
           Rectangle {
-            visible: blockDelegate.isVerse || blockDelegate.isFlow || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
+            visible: blockDelegate.isVerse
+              || (blockDelegate.isFlow && !blockDelegate.perVerseHighlight)
+              || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
             anchors.fill: parent
             radius: root.usePublication && (isFlow || kind === "blank") ? 0 : Style.cornerRadius
             color: blockDelegate.selected
@@ -1393,8 +1395,19 @@ Item {
                 required property int index
                 readonly property int n: Math.floor(Number(modelData.n) || 0)
                 readonly property bool showNum: !!modelData.showNum
-                readonly property bool runSelected: root.verseSelected(run.n)
-                readonly property bool runHovered: root.verseHovered(run.n)
+                readonly property bool runSelected: {
+                  var sv = root.startVerse
+                  var ev = root.endVerse
+                  var sa = root.searchActive
+                  return Bible.verseSelected(run.n, sv, ev, sa)
+                }
+                readonly property bool runHovered: {
+                  var fv = root.focusVerse
+                  var sv = root.startVerse
+                  var ev = root.endVerse
+                  var sa = root.searchActive
+                  return Bible.verseHovered(run.n, fv, sv, ev, sa)
+                }
                 readonly property int numGap: showNum ? Style.space(4) : 0
                 readonly property int numW: showNum ? Math.ceil(numLabel.implicitWidth) + numGap : 0
                 readonly property int bodyW: Math.min(Math.ceil(bodyMetrics.implicitWidth), Math.max(1, flow.width - numW))

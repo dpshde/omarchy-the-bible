@@ -96,6 +96,7 @@ var BibleApi = (function() {
     pubBlockUsesPerVerseHighlight: () => pubBlockUsesPerVerseHighlight,
     pubBlocks: () => pubBlocks,
     pubRowIndexForVerse: () => pubRowIndexForVerse,
+    readerBlockSelected: () => readerBlockSelected,
     readerBlocks: () => readerBlocks,
     selectedText: () => selectedText,
     serializeState: () => serializeState,
@@ -104,6 +105,7 @@ var BibleApi = (function() {
     testamentOf: () => testamentOf,
     toCanonical: () => toCanonical,
     uniqueBlockVerses: () => uniqueBlockVerses,
+    usfmHighlightState: () => usfmHighlightState,
     verseHovered: () => verseHovered,
     verseInRange: () => verseInRange,
     verseSelected: () => verseSelected,
@@ -981,16 +983,72 @@ var BibleApi = (function() {
     const n = Math.floor(Number(verse) || 0);
     return n >= start && n <= end;
   }
+  function listLength(value) {
+    if (!value || typeof value !== "object") return 0;
+    const length = value.length;
+    return typeof length === "number" && Number.isFinite(length) && length >= 0 ? length : 0;
+  }
+  function partVerseNumber(part) {
+    if (!part || typeof part !== "object") return 0;
+    return Math.floor(Number(part.n) || 0);
+  }
+  function eachPart(parts, visit) {
+    const len = listLength(parts);
+    for (let i = 0; i < len; i++) {
+      const part = parts[i];
+      if (part) visit(part);
+    }
+  }
   function uniqueBlockVerses(block) {
     const seen = /* @__PURE__ */ new Set();
-    for (const part of block.parts || []) {
-      const n = Math.floor(Number(part.n) || 0);
+    eachPart(block.parts, (part) => {
+      const n = partVerseNumber(part);
       if (n >= 1) seen.add(n);
-    }
+    });
     return [...seen].sort((a, b) => a - b);
   }
   function pubBlockUsesPerVerseHighlight(block) {
     return FLOW_KINDS.has(block.kind) && uniqueBlockVerses(block).length > 1;
+  }
+  function readerBlockSelected(block, startVerse, endVerse) {
+    if (pubBlockUsesPerVerseHighlight(block)) return false;
+    if (!hasVerseSelection(startVerse, endVerse)) return false;
+    const lo = Math.min(startVerse, endVerse);
+    const hi = Math.max(startVerse, endVerse);
+    const fillVerse = Math.floor(Number(block.fillVerse) || 0);
+    if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi;
+    if (block.kind === "verse") {
+      const verseNum = Math.floor(Number(block.n) || 0);
+      return verseNum >= lo && verseNum <= hi;
+    }
+    if (!FLOW_KINDS.has(block.kind)) return false;
+    let hit = false;
+    eachPart(block.parts, (part) => {
+      const n = partVerseNumber(part);
+      if (n >= lo && n <= hi) hit = true;
+    });
+    return hit;
+  }
+  function usfmHighlightState(block, focusVerse, startVerse, endVerse, searchActive = false) {
+    const verses = uniqueBlockVerses(block);
+    const perRun = pubBlockUsesPerVerseHighlight(block);
+    if (perRun) {
+      return {
+        mode: "per-run",
+        selected: verses.filter((n) => verseSelected(n, startVerse, endVerse, searchActive)),
+        hovered: verses.filter((n) => verseHovered(n, focusVerse, startVerse, endVerse, searchActive))
+      };
+    }
+    const hasSel = hasVerseSelection(startVerse, endVerse);
+    if (hasSel) {
+      const { start, end } = orderedRange(startVerse, endVerse);
+      const blockSelected = verses.some((n) => n >= start && n <= end);
+      return { mode: "block", selected: blockSelected ? verses : [], hovered: [] };
+    }
+    if (searchActive) return { mode: "block", selected: [], hovered: [] };
+    const focus = Math.floor(Number(focusVerse) || 0);
+    const blockHovered = verses.includes(focus);
+    return { mode: "block", selected: [], hovered: blockHovered ? verses : [] };
   }
   function verseSelected(verse, startVerse, endVerse, searchActive = false) {
     if (searchActive) return false;
@@ -1010,9 +1068,11 @@ var BibleApi = (function() {
       if (!row) continue;
       if (row.kind === "verse" && "n" in row && row.n === n) return i;
       const parts = "parts" in row ? row.parts : void 0;
-      for (const part of parts || []) {
-        if (Math.floor(Number(part.n) || 0) === n) return i;
-      }
+      let matched = false;
+      eachPart(parts, (part) => {
+        if (!matched && partVerseNumber(part) === n) matched = true;
+      });
+      if (matched) return i;
       if ("fillVerse" in row && row.fillVerse === n) return i;
     }
     return -1;
@@ -1229,6 +1289,8 @@ function orderedRange() { return BibleApi.orderedRange.apply(null, arguments); }
 function verseInRange() { return BibleApi.verseInRange.apply(null, arguments); }
 function uniqueBlockVerses() { return BibleApi.uniqueBlockVerses.apply(null, arguments); }
 function pubBlockUsesPerVerseHighlight() { return BibleApi.pubBlockUsesPerVerseHighlight.apply(null, arguments); }
+function readerBlockSelected() { return BibleApi.readerBlockSelected.apply(null, arguments); }
+function usfmHighlightState() { return BibleApi.usfmHighlightState.apply(null, arguments); }
 function verseSelected() { return BibleApi.verseSelected.apply(null, arguments); }
 function verseHovered() { return BibleApi.verseHovered.apply(null, arguments); }
 function pubRowIndexForVerse() { return BibleApi.pubRowIndexForVerse.apply(null, arguments); }
