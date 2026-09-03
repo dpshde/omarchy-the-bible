@@ -518,8 +518,39 @@ export function uniqueBlockVerses(block: Pick<PubBlock, "parts" | "kind">): numb
   return [...seen].sort((a, b) => a - b);
 }
 
-export function pubBlockUsesPerVerseHighlight(block: PubBlock): boolean {
-  return FLOW_KINDS.has(block.kind) && uniqueBlockVerses(block).length > 1;
+export function pubFlowUsesPerRunFill(kind: unknown): boolean {
+  return FLOW_KINDS.has(String(kind || ""));
+}
+
+export function pubBlockUsesPerVerseHighlight(block: Pick<PubBlock, "kind">): boolean {
+  return pubFlowUsesPerRunFill(block.kind);
+}
+
+export type PubFlowHighlight = {
+  useBlockFill: boolean;
+  usePerRunFill: boolean;
+  runSelected: boolean;
+  runHovered: boolean;
+};
+
+export function pubFlowHighlight(
+  kind: unknown,
+  runVerse: unknown,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): PubFlowHighlight {
+  const usePerRun = pubFlowUsesPerRunFill(kind);
+  const n = Math.floor(Number(runVerse) || 0);
+  const runSelected = verseSelected(n, startVerse, endVerse, searchActive);
+  const runHovered = verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
+  return {
+    useBlockFill: !usePerRun,
+    usePerRunFill: usePerRun && (runSelected || runHovered),
+    runSelected,
+    runHovered
+  };
 }
 
 export function readerBlockSelected(
@@ -527,7 +558,7 @@ export function readerBlockSelected(
   startVerse: number,
   endVerse: number
 ): boolean {
-  if (pubBlockUsesPerVerseHighlight(block)) return false;
+  if (pubFlowUsesPerRunFill(block.kind)) return false;
   if (!hasVerseSelection(startVerse, endVerse)) return false;
   const lo = Math.min(startVerse, endVerse);
   const hi = Math.max(startVerse, endVerse);
@@ -537,13 +568,7 @@ export function readerBlockSelected(
     const verseNum = Math.floor(Number((block as { n?: unknown }).n) || 0);
     return verseNum >= lo && verseNum <= hi;
   }
-  if (!FLOW_KINDS.has(block.kind)) return false;
-  let hit = false;
-  eachPart(block.parts, (part) => {
-    const n = partVerseNumber(part);
-    if (n >= lo && n <= hi) hit = true;
-  });
-  return hit;
+  return false;
 }
 
 export type UsfmHighlightState = {
@@ -560,7 +585,7 @@ export function usfmHighlightState(
   searchActive = false
 ): UsfmHighlightState {
   const verses = uniqueBlockVerses(block);
-  const perRun = pubBlockUsesPerVerseHighlight(block);
+  const perRun = pubFlowUsesPerRunFill(block.kind);
   if (perRun) {
     return {
       mode: "per-run",

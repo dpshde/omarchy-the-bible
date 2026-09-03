@@ -28,6 +28,8 @@ await bundlePragmaLibrary({
     "orderedRange",
     "verseInRange",
     "uniqueBlockVerses",
+    "pubFlowUsesPerRunFill",
+    "pubFlowHighlight",
     "pubBlockUsesPerVerseHighlight",
     "readerBlockSelected",
     "usfmHighlightState",
