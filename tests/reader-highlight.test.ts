@@ -79,7 +79,9 @@ describe("Reader USFM highlight bindings", () => {
 
     const uniqueVerseCount = qmlUniqueVerseCount(opening.parts);
     expect(uniqueVerseCount).toBe(5);
-    const perVerseHighlight = true && uniqueVerseCount > 1;
+    const isFlow = opening.kind === "para";
+    const perVerseHighlight = isFlow && uniqueVerseCount > 1;
+    expect(isFlow).toBe(true);
     expect(perVerseHighlight).toBe(true);
     expect(perVerseHighlight ? false : oldBlockAnyPartSelected(opening.parts, [1], 1, 1)).toBe(false);
 
