@@ -20,6 +20,7 @@ Omarchy clones this repository into `~/.config/omarchy/plugins/io.github.dpshde.
 
 ```sh
 omarchy plugin add https://github.com/dpshde/omarchy-the-bible.git --enable
+omarchy plugin validate ~/.config/omarchy/plugins/io.github.dpshde.the-bible
 omarchy bar move io.github.dpshde.the-bible --section right
 ```
 
@@ -27,11 +28,13 @@ From a local checkout of the same committed files:
 
 ```sh
 omarchy plugin add "$PWD" --enable
-omarchy bar move io.github.dpshde.the-bible --section right
 omarchy plugin validate ~/.config/omarchy/plugins/io.github.dpshde.the-bible
+omarchy bar move io.github.dpshde.the-bible --section right
 ```
 
 Omarchy forbids symlinks in plugin folders; add the checkout rather than linking it. Runtime verse text and JS are the committed `data/` and `js/` files.
+
+A marketplace or workbench review pins a full 40-character commit, checks it out detached with Git hooks disabled, then runs `omarchy plugin validate`. `omarchy plugin add` follows upstream HEAD and is not verification-bound.
 
 ## Usage
 

@@ -1,16 +1,20 @@
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync } from "node:fs";
+import { closeSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  INVENTORY_SKIP_DIRS,
   PLUGIN_ID,
+  REVIEWED_EXEC_SINKS,
   RUNTIME_NAMES,
+  artifactKindFromHeader,
   classifyWrite,
   isPathInside,
   lifecycleScriptNames,
   looksLikeInstallerBasename,
   looksLikePackageManager,
+  looksLikeShellInterpolation,
   pluginDir,
   pluginParentDir,
   requireAbsoluteHome,
@@ -38,10 +42,23 @@ function walkFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walkFiles(full));
-    else out.push(full);
+    if (entry.isDirectory()) {
+      if ((INVENTORY_SKIP_DIRS as readonly string[]).includes(entry.name)) continue;
+      out.push(...walkFiles(full));
+    } else out.push(full);
   }
   return out;
+}
+
+function readHeader(path: string): Uint8Array {
+  const fd = openSync(path, "r");
+  try {
+    const buf = new Uint8Array(4);
+    const n = readSync(fd, buf, 0, 4, 0);
+    return buf.subarray(0, n);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function assertInsideHome(home: string, candidate: string): void {
@@ -108,6 +125,8 @@ describe("scanner pattern helpers", () => {
     expect(looksLikePackageManager("omarchy plugin add \"$PWD\" --enable")).toBe(false);
     expect(looksLikePackageManager("pnpm fetch-bsb")).toBe(false);
     expect(looksLikePackageManager("pnpm build")).toBe(false);
+    expect(looksLikeShellInterpolation('Quickshell.execDetached(["bash", "-c", cmd])')).toBe(true);
+    expect(looksLikeShellInterpolation('Quickshell.execDetached(["wl-copy", "--", payload])')).toBe(false);
   });
 
   it("flags installer basenames the marketplace baseline treats as setup files", () => {
@@ -206,6 +225,7 @@ describe("user-facing install contract", () => {
     expect(looksLikePackageManager(readme)).toBe(false);
     expect(readme).toMatch(/omarchy plugin add https:\/\/github.com\/dpshde\/omarchy-the-bible\.git --enable/);
     expect(readme).toMatch(/omarchy plugin add "\$PWD" --enable/);
+    expect(readme).toMatch(/omarchy plugin validate ~\/\.config\/omarchy\/plugins\/io\.github\.dpshde\.the-bible/);
     expect(readme).toMatch(/omarchy plugin remove io\.github\.dpshde\.the-bible/);
     expect(readme).not.toMatch(/pnpm\s+install/);
     expect(readme).not.toMatch(/install-local/);
@@ -225,5 +245,38 @@ describe("user-facing install contract", () => {
     const reader = readFileSync(join(repoRoot, "Reader.qml"), "utf8");
     expect(reader).toContain('home + "/.local/state/omarchy/settings/route-bible.json"');
     expect(reader).toMatch(/python3.*stateHelper/);
+    expect(looksLikeShellInterpolation(reader)).toBe(false);
+    expect(reader).toContain('["wl-copy", "--", root.routeLink]');
+    const panel = readFileSync(join(repoRoot, "Panel.qml"), "utf8");
+    expect(looksLikeShellInterpolation(panel)).toBe(false);
+    expect(panel).toContain('["omarchy-shell", "shell", "summon", "io.github.dpshde.the-bible", "{}"]');
+  });
+});
+
+describe("workbench executable inventory", () => {
+  it("classifies ELF/PE/Mach-O headers and execute bits", () => {
+    expect(artifactKindFromHeader(Uint8Array.from([0x7f, 0x45, 0x4c, 0x46]), 0o644)).toBe("elf");
+    expect(artifactKindFromHeader(Uint8Array.from([0x4d, 0x5a, 0, 0]), 0o644)).toBe("pe");
+    expect(artifactKindFromHeader(Uint8Array.from([0xcf, 0xfa, 0xed, 0xfe]), 0o644)).toBe("mach-o");
+    expect(artifactKindFromHeader(Uint8Array.from([0x23, 0x21, 0x2f, 0x75]), 0o755)).toBe("executable-source");
+    expect(artifactKindFromHeader(Uint8Array.from([0x23, 0x21, 0x2f, 0x75]), 0o644)).toBeNull();
+  });
+
+  it("ships no binaries or +x files and accounts for every exec sink", () => {
+    const tracked = walkFiles(repoRoot).filter((file) => {
+      const rel = relative(repoRoot, file);
+      return !rel.startsWith(".git/") && !rel.startsWith("node_modules/") && !rel.startsWith(".cache/");
+    });
+    const artifacts = tracked.flatMap((file) => {
+      const kind = artifactKindFromHeader(readHeader(file), lstatSync(file).mode);
+      return kind ? [{ path: relative(repoRoot, file), kind }] : [];
+    });
+    expect(artifacts).toEqual([]);
+    expect(REVIEWED_EXEC_SINKS.map((sink) => sink.path).sort()).toEqual(
+      ["Panel.qml", "Reader.qml", "Reader.qml", "safe-state.py"].sort()
+    );
+    const helper = readFileSync(join(repoRoot, "safe-state.py"), "utf8");
+    expect(helper.startsWith("#!/usr/bin/env python3")).toBe(true);
+    expect(lstatSync(join(repoRoot, "safe-state.py")).mode & 0o111).toBe(0);
   });
 });

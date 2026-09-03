@@ -97,3 +97,58 @@ export function lifecycleScriptNames(scripts: Record<string, unknown> | undefine
   const keys = Object.keys(scripts || {});
   return keys.filter((key) => LIFECYCLE_SCRIPTS.includes(key));
 }
+
+export const INVENTORY_SKIP_DIRS = [".git", "target", "node_modules", ".venv", "vendor"] as const;
+
+export const REVIEWED_EXEC_SINKS = [
+  {
+    path: "safe-state.py",
+    kind: "reviewed-source",
+    argv: ["python3", "safe-state.py", "check|read|write", "STATE_PATH", "MAX"],
+    evidence: "Mode 0644 shebang helper. Reader.qml invokes it as a python3 argv array with a HOME-bounded state path and a 2048-byte cap."
+  },
+  {
+    path: "Reader.qml",
+    kind: "qml-exec-sink",
+    argv: ["omarchy", "launch", "browser", "https://route.bible|https://margin.bible/..."],
+    evidence: "Util.execArgv array. Hosts are hardcoded in src/route.ts; the slug is encodeURIComponent of a parsed canonical."
+  },
+  {
+    path: "Reader.qml",
+    kind: "qml-exec-sink",
+    argv: ["wl-copy", "--", "TEXT"],
+    evidence: "Quickshell.execDetached argv only. No bash -c, no interpolated shell source."
+  },
+  {
+    path: "Panel.qml",
+    kind: "qml-exec-sink",
+    argv: ["omarchy-shell", "shell", "summon", "io.github.dpshde.the-bible", "{}"],
+    evidence: "Util.execArgv array with a fixed plugin id and empty payload."
+  }
+] as const;
+
+export function artifactKindFromHeader(header: Uint8Array, mode: number): "elf" | "pe" | "mach-o" | "executable-source" | null {
+  if (header.length >= 4 && header[0] === 0x7f && header[1] === 0x45 && header[2] === 0x4c && header[3] === 0x46) {
+    return "elf";
+  }
+  if (header.length >= 2 && header[0] === 0x4d && header[1] === 0x5a) return "pe";
+  if (header.length >= 4) {
+    const be = (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3];
+    const unsigned = be >>> 0;
+    if (
+      unsigned === 0xfeedface
+      || unsigned === 0xfeedfacf
+      || unsigned === 0xcafebabe
+      || unsigned === 0xcefaedfe
+      || unsigned === 0xcffaedfe
+    ) {
+      return "mach-o";
+    }
+  }
+  if (mode & 0o111) return "executable-source";
+  return null;
+}
+
+export function looksLikeShellInterpolation(text: string): boolean {
+  return /(?:^|[\s["'])(?:bash|sh|zsh|dash)\s+-c\b|\/bin\/sh\b/.test(text);
+}
