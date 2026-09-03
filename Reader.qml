@@ -1180,12 +1180,17 @@ Item {
         keyNavigationEnabled: false
         activeFocusOnTab: false
         focus: false
+        currentIndex: -1
+        highlightFollowsCurrentItem: false
+        highlightRangeMode: ListView.NoHighlightRange
+        highlight: Item { width: 0; height: 0; visible: false }
         model: root.usePublication ? root.pubRows : root.readerRows
 
         delegate: Item {
           id: blockDelegate
           required property var modelData
           width: ListView.view ? ListView.view.width : 1
+          clip: true
           height: (kind === "blank"
             ? Style.space(10)
             : (kind === "refs"
@@ -1196,32 +1201,25 @@ Item {
           readonly property bool isVerse: kind === "verse"
           readonly property bool isFlow: kind === "para" || kind === "q1" || kind === "q2" || kind === "li" || kind === "d"
           readonly property var refLinks: kind === "refs" ? Bible.splitRefs(String(modelData.text || "")) : []
-          readonly property int verseNum: Number(modelData.n)
+          readonly property int verseNum: Math.floor(Number(modelData.n) || 0)
           readonly property int indent: Number(modelData.indent || 0)
           readonly property bool join: !!modelData.join
           readonly property bool joinNext: !!modelData.joinNext
           readonly property int fillVerse: Math.floor(Number(modelData.fillVerse) || 0)
           readonly property var parts: modelData.parts || []
-          readonly property bool perVerseHighlight: isFlow || Bible.pubFlowUsesPerRunFill(kind)
+          readonly property bool perVerseHighlight: Bible.pubFlowUsesPerRunFill(kind)
           readonly property string blockLabel: isVerse
             ? (verseNum + "  " + String(modelData.t || ""))
             : (kind === "refs" ? ("(" + String(modelData.text || "") + ")") : String(modelData.text || ""))
-          readonly property bool selected: {
-            if (isFlow) return false
-            if (!(root.startVerse >= 1 && root.endVerse >= 1)) return false
-            var lo = Math.min(root.startVerse, root.endVerse)
-            var hi = Math.max(root.startVerse, root.endVerse)
-            if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi
-            if (isVerse) return verseNum >= lo && verseNum <= hi
-            return false
-          }
-          readonly property bool hovered: {
-            if (isFlow) return false
-            if (root.searchActive || selected) return false
-            if (fillVerse >= 1) return fillVerse === root.focusVerse
-            if (isVerse) return verseNum === root.focusVerse
-            return false
-          }
+          readonly property bool selected: Bible.readerBlockFillSelected(
+            kind, fillVerse, verseNum, root.startVerse, root.endVerse, root.searchActive
+          )
+          readonly property bool hovered: Bible.readerBlockFillHovered(
+            kind, fillVerse, verseNum, root.focusVerse, root.startVerse, root.endVerse, root.searchActive
+          )
+          readonly property bool showBlockFill: Bible.readerBlockFillShow(
+            kind, fillVerse, verseNum, root.focusVerse, root.startVerse, root.endVerse, root.searchActive
+          )
           readonly property int topPad: {
             if (join) return 0
             if (kind === "heading" && modelData.spaced) return Style.space(16)
@@ -1246,8 +1244,7 @@ Item {
           }
 
           Rectangle {
-            visible: blockDelegate.isVerse
-              || (blockDelegate.kind === "blank" && (blockDelegate.selected || blockDelegate.hovered))
+            visible: blockDelegate.showBlockFill
             anchors.fill: parent
             radius: root.usePublication && (isFlow || kind === "blank") ? 0 : Style.cornerRadius
             color: blockDelegate.selected
@@ -1384,19 +1381,13 @@ Item {
                 required property int index
                 readonly property int n: Math.floor(Number(modelData.n) || 0)
                 readonly property bool showNum: !!modelData.showNum
-                readonly property bool runSelected: {
-                  var sv = root.startVerse
-                  var ev = root.endVerse
-                  var sa = root.searchActive
-                  return Bible.verseSelected(run.n, sv, ev, sa)
-                }
-                readonly property bool runHovered: {
-                  var fv = root.focusVerse
-                  var sv = root.startVerse
-                  var ev = root.endVerse
-                  var sa = root.searchActive
-                  return Bible.verseHovered(run.n, fv, sv, ev, sa)
-                }
+                readonly property bool runSelected: run.n >= 1 && Bible.verseSelected(
+                  run.n, root.startVerse, root.endVerse, root.searchActive
+                )
+                readonly property bool runHovered: run.n >= 1 && Bible.verseHovered(
+                  run.n, root.focusVerse, root.startVerse, root.endVerse, root.searchActive
+                )
+                readonly property bool showRunFill: blockDelegate.perVerseHighlight && (run.runSelected || run.runHovered)
                 readonly property int numGap: showNum ? Style.space(4) : 0
                 readonly property int numW: showNum ? Math.ceil(numLabel.implicitWidth) + numGap : 0
                 readonly property int bodyW: Math.min(Math.ceil(bodyMetrics.implicitWidth), Math.max(1, flow.width - numW))
@@ -1404,7 +1395,7 @@ Item {
                 height: Math.max(showNum ? numLabel.implicitHeight : 0, runText.implicitHeight)
 
                 Rectangle {
-                  visible: blockDelegate.perVerseHighlight && (run.runSelected || run.runHovered)
+                  visible: run.showRunFill
                   anchors.fill: parent
                   radius: Style.cornerRadius
                   color: run.runSelected ? root.selectionFill : root.hoverFill

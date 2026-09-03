@@ -543,14 +543,79 @@ export function pubFlowHighlight(
 ): PubFlowHighlight {
   const usePerRun = pubFlowUsesPerRunFill(kind);
   const n = Math.floor(Number(runVerse) || 0);
-  const runSelected = verseSelected(n, startVerse, endVerse, searchActive);
-  const runHovered = verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
+  const runSelected = n >= 1 && verseSelected(n, startVerse, endVerse, searchActive);
+  const runHovered = n >= 1 && verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
   return {
-    useBlockFill: !usePerRun,
+    useBlockFill: false,
     usePerRunFill: usePerRun && (runSelected || runHovered),
     runSelected,
     runHovered
   };
+}
+
+const BLOCK_FILL_KINDS = new Set(["verse", "blank"]);
+const NEVER_BLOCK_FILL_KINDS = new Set(["heading", "subhead", "refs"]);
+
+export type ReaderBlockFill = {
+  show: boolean;
+  selected: boolean;
+  hovered: boolean;
+};
+
+export function readerBlockFill(
+  kind: unknown,
+  fillVerse: unknown,
+  verseNum: unknown,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): ReaderBlockFill {
+  const none = { show: false, selected: false, hovered: false };
+  const k = String(kind || "");
+  if (pubFlowUsesPerRunFill(k) || NEVER_BLOCK_FILL_KINDS.has(k) || !BLOCK_FILL_KINDS.has(k)) {
+    return none;
+  }
+  const n = k === "verse" ? Math.floor(Number(verseNum) || 0) : Math.floor(Number(fillVerse) || 0);
+  if (n < 1) return none;
+  const selected = verseSelected(n, startVerse, endVerse, searchActive);
+  const hovered = verseHovered(n, focusVerse, startVerse, endVerse, searchActive);
+  return { show: selected || hovered, selected, hovered };
+}
+
+export function readerBlockFillSelected(
+  kind: unknown,
+  fillVerse: unknown,
+  verseNum: unknown,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): boolean {
+  return readerBlockFill(kind, fillVerse, verseNum, 0, startVerse, endVerse, searchActive).selected;
+}
+
+export function readerBlockFillHovered(
+  kind: unknown,
+  fillVerse: unknown,
+  verseNum: unknown,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): boolean {
+  return readerBlockFill(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive).hovered;
+}
+
+export function readerBlockFillShow(
+  kind: unknown,
+  fillVerse: unknown,
+  verseNum: unknown,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): boolean {
+  return readerBlockFill(kind, fillVerse, verseNum, focusVerse, startVerse, endVerse, searchActive).show;
 }
 
 export function readerBlockSelected(
@@ -558,17 +623,58 @@ export function readerBlockSelected(
   startVerse: number,
   endVerse: number
 ): boolean {
-  if (pubFlowUsesPerRunFill(block.kind)) return false;
-  if (!hasVerseSelection(startVerse, endVerse)) return false;
-  const lo = Math.min(startVerse, endVerse);
-  const hi = Math.max(startVerse, endVerse);
-  const fillVerse = Math.floor(Number(block.fillVerse) || 0);
-  if (fillVerse >= 1) return fillVerse >= lo && fillVerse <= hi;
-  if (block.kind === "verse") {
-    const verseNum = Math.floor(Number((block as { n?: unknown }).n) || 0);
-    return verseNum >= lo && verseNum <= hi;
-  }
-  return false;
+  const verseNum = Math.floor(Number((block as { n?: unknown }).n) || 0);
+  return readerBlockFillSelected(block.kind, block.fillVerse, verseNum, startVerse, endVerse, false);
+}
+
+export type PubRunPaint = {
+  n: number;
+  fill: "none" | "selection" | "hover";
+};
+
+export type PubRowPaint = {
+  kind: string;
+  blockFill: "none" | "selection" | "hover";
+  runs: PubRunPaint[];
+};
+
+export function pubRowPaint(
+  block: Pick<PubBlock, "kind" | "parts" | "fillVerse"> & { n?: number },
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): PubRowPaint {
+  const fill = readerBlockFill(
+    block.kind,
+    block.fillVerse,
+    block.n,
+    focusVerse,
+    startVerse,
+    endVerse,
+    searchActive
+  );
+  const blockFill = fill.selected ? "selection" : fill.hovered ? "hover" : "none";
+  const runs: PubRunPaint[] = [];
+  eachPart(block.parts, (part) => {
+    const n = partVerseNumber(part);
+    const paint = pubFlowHighlight(block.kind, n, focusVerse, startVerse, endVerse, searchActive);
+    runs.push({
+      n,
+      fill: paint.usePerRunFill ? (paint.runSelected ? "selection" : "hover") : "none"
+    });
+  });
+  return { kind: String(block.kind || ""), blockFill, runs };
+}
+
+export function pubChapterPaint(
+  rows: Array<Pick<PubBlock, "kind" | "parts" | "fillVerse"> & { n?: number }>,
+  focusVerse: number,
+  startVerse: number,
+  endVerse: number,
+  searchActive = false
+): PubRowPaint[] {
+  return rows.map((row) => pubRowPaint(row, focusVerse, startVerse, endVerse, searchActive));
 }
 
 export type UsfmHighlightState = {
