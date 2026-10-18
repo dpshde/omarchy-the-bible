@@ -1,0 +1,8 @@
+module qs.Ui
+singleton Util 1.0 Util.qml
+singleton Border 1.0 Border.qml
+TextField 1.0 TextField.qml
+Button 1.0 Button.qml
+BorderSurface 1.0 BorderSurface.qml
+ButtonGroup 1.0 ButtonGroup.qml
+PointerMoveGate 1.0 PointerMoveGate.qml

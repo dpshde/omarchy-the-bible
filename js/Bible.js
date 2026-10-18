@@ -73,6 +73,7 @@ var BibleApi = (function() {
     defaultBook: () => defaultBook,
     defaultChapter: () => defaultChapter,
     defaultVerse: () => defaultVerse,
+    dragAutoScrollStep: () => dragAutoScrollStep,
     formatCompact: () => formatCompact,
     formatDisplay: () => formatDisplay,
     hasVerseSelection: () => hasVerseSelection,
@@ -107,6 +108,7 @@ var BibleApi = (function() {
     readerBlockSelected: () => readerBlockSelected,
     readerBlocks: () => readerBlocks,
     selectedText: () => selectedText,
+    selectionScrollRows: () => selectionScrollRows,
     serializeState: () => serializeState,
     splitRefs: () => splitRefs,
     stateMaxBytes: () => stateMaxBytes,
@@ -1106,8 +1108,7 @@ var BibleApi = (function() {
     const blockHovered = verses.includes(focus);
     return { mode: "block", selected: [], hovered: blockHovered ? verses : [] };
   }
-  function verseSelected(verse, startVerse, endVerse, searchActive = false) {
-    if (searchActive) return false;
+  function verseSelected(verse, startVerse, endVerse, _searchActive = false) {
     return verseInRange(verse, startVerse, endVerse);
   }
   function verseHovered(verse, focusVerse, startVerse, endVerse, searchActive = false) {
@@ -1115,6 +1116,28 @@ var BibleApi = (function() {
     const n = Math.floor(Number(verse) || 0);
     if (verseSelected(n, startVerse, endVerse, false)) return false;
     return n === Math.floor(Number(focusVerse) || 0);
+  }
+  function selectionScrollRows(rows, startVerse, endVerse, focusVerse) {
+    if (!hasVerseSelection(startVerse, endVerse)) {
+      const idx = pubRowIndexForVerse(rows, focusVerse);
+      return idx >= 0 ? [idx] : [];
+    }
+    const { start, end } = orderedRange(startVerse, endVerse);
+    const out = [];
+    const endIdx = pubRowIndexForVerse(rows, end);
+    const startIdx = pubRowIndexForVerse(rows, start);
+    if (endIdx >= 0) out.push(endIdx);
+    if (startIdx >= 0 && startIdx !== endIdx) out.push(startIdx);
+    return out;
+  }
+  function dragAutoScrollStep(viewY, viewHeight, edge = 24, maxStep = 18) {
+    const y = Number(viewY);
+    const h = Number(viewHeight);
+    if (!Number.isFinite(y) || !Number.isFinite(h) || h <= 0 || edge <= 0) return 0;
+    const band = Math.min(edge, h / 4);
+    if (y < band) return -Math.ceil(maxStep * Math.min(1, (band - y) / band));
+    if (y > h - band) return Math.ceil(maxStep * Math.min(1, (y - (h - band)) / band));
+    return 0;
   }
   function pubRowIndexForVerse(rows, verse) {
     const n = Math.floor(Number(verse) || 0);
@@ -1358,6 +1381,8 @@ function usfmHighlightState() { return BibleApi.usfmHighlightState.apply(null, a
 function verseSelected() { return BibleApi.verseSelected.apply(null, arguments); }
 function verseHovered() { return BibleApi.verseHovered.apply(null, arguments); }
 function pubRowIndexForVerse() { return BibleApi.pubRowIndexForVerse.apply(null, arguments); }
+function selectionScrollRows() { return BibleApi.selectionScrollRows.apply(null, arguments); }
+function dragAutoScrollStep() { return BibleApi.dragAutoScrollStep.apply(null, arguments); }
 function advanceFocusVerse() { return BibleApi.advanceFocusVerse.apply(null, arguments); }
 function hasVerseSelection() { return BibleApi.hasVerseSelection.apply(null, arguments); }
 function isWholeChapter() { return BibleApi.isWholeChapter.apply(null, arguments); }

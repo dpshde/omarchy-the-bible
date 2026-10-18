@@ -16,6 +16,7 @@
     "check": "pnpm run typecheck && pnpm run test && pnpm run build",
     "lint": "pnpm exec oxlint src tests scripts",
     "test": "pnpm exec vitest run",
+    "test:qml": "bash scripts/qml-test.sh",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

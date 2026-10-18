@@ -42,6 +42,8 @@ await bundlePragmaLibrary({
     "verseSelected",
     "verseHovered",
     "pubRowIndexForVerse",
+    "selectionScrollRows",
+    "dragAutoScrollStep",
     "advanceFocusVerse",
     "hasVerseSelection",
     "isWholeChapter",

@@ -711,13 +711,16 @@ export function usfmHighlightState(
   return { mode: "block", selected: [], hovered: blockHovered ? verses : [] };
 }
 
+// The selected range stays painted while the search field has focus, so a
+// typed or searched reference (e.g. "Philippians 4:11-13") is visible right
+// away, the way route.bible keeps the selected verse highlighted. Only the
+// keyboard/pointer hover cursor is hidden while searching.
 export function verseSelected(
   verse: number,
   startVerse: number,
   endVerse: number,
-  searchActive = false
+  _searchActive = false
 ): boolean {
-  if (searchActive) return false;
   return verseInRange(verse, startVerse, endVerse);
 }
 
@@ -732,6 +735,40 @@ export function verseHovered(
   const n = Math.floor(Number(verse) || 0);
   if (verseSelected(n, startVerse, endVerse, false)) return false;
   return n === Math.floor(Number(focusVerse) || 0);
+}
+
+// Rows to bring into view for a selection, in order: the end row first, then
+// the start row, so a range that fits is fully visible and a long range
+// always shows its first verse.
+export function selectionScrollRows(
+  rows: Array<PubBlock | ReaderBlock>,
+  startVerse: number,
+  endVerse: number,
+  focusVerse: number
+): number[] {
+  if (!hasVerseSelection(startVerse, endVerse)) {
+    const idx = pubRowIndexForVerse(rows, focusVerse);
+    return idx >= 0 ? [idx] : [];
+  }
+  const { start, end } = orderedRange(startVerse, endVerse);
+  const out: number[] = [];
+  const endIdx = pubRowIndexForVerse(rows, end);
+  const startIdx = pubRowIndexForVerse(rows, start);
+  if (endIdx >= 0) out.push(endIdx);
+  if (startIdx >= 0 && startIdx !== endIdx) out.push(startIdx);
+  return out;
+}
+
+// Edge auto-scroll while drag-selecting verses: pixels per tick to move the
+// list (negative scrolls up). Zero when the pointer is outside the edge bands.
+export function dragAutoScrollStep(viewY: number, viewHeight: number, edge = 24, maxStep = 18): number {
+  const y = Number(viewY);
+  const h = Number(viewHeight);
+  if (!Number.isFinite(y) || !Number.isFinite(h) || h <= 0 || edge <= 0) return 0;
+  const band = Math.min(edge, h / 4);
+  if (y < band) return -Math.ceil(maxStep * Math.min(1, (band - y) / band));
+  if (y > h - band) return Math.ceil(maxStep * Math.min(1, (y - (h - band)) / band));
+  return 0;
 }
 
 export function pubRowIndexForVerse(

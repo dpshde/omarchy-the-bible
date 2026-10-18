@@ -3,3 +3,4 @@ node_modules/
 *.raw.js
 .DS_Store
 
+.qml-shots/

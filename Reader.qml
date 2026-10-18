@@ -239,7 +239,7 @@ Item {
     root.searchError = ""
     if (persistNow !== false) root.persist()
     if (!root.suppressSearchSync) root.syncSearchToChapter()
-    Qt.callLater(root.scrollToFocus)
+    Qt.callLater(root.scrollToSelection)
     return true
   }
 
@@ -322,7 +322,7 @@ Item {
     root.startVerse = range.start
     root.endVerse = range.end
     root.focusVerse = Bible.clampVerse(root.bible, root.book, root.chapter, b)
-    root.persist()
+    if (!root.dragging) root.persist()
     if (!root.suppressSearchSync) root.syncSearchToChapter()
     if (!root.dragging) root.scrollToFocus()
   }
@@ -784,6 +784,16 @@ Item {
     verseList.positionViewAtIndex(idx, ListView.Contain)
   }
 
+  function scrollToSelection() {
+    if (!verseList.count) return
+    var rows = Bible.selectionScrollRows(
+      root.usePublication ? root.pubRows : root.readerRows,
+      root.startVerse, root.endVerse, root.focusVerse
+    )
+    for (var i = 0; i < rows.length; i++)
+      verseList.positionViewAtIndex(rows[i], ListView.Contain)
+  }
+
   function verseSelected(n) {
     return Bible.verseSelected(n, root.startVerse, root.endVerse, root.searchActive)
   }
@@ -807,9 +817,28 @@ Item {
     return 0
   }
 
-  function verseIndexAt(mouseY) {
-    var mapped = verseList.mapToItem(verseList.contentItem, 8, mouseY)
+  // viewX/viewY are in verseList (viewport) coordinates.
+  function verseIndexAt(viewY, viewX) {
+    var mapped = verseList.mapToItem(verseList.contentItem, viewX === undefined ? 8 : viewX, viewY)
     return verseList.indexAt(mapped.x, mapped.y)
+  }
+
+  function verseAtPoint(viewX, viewY) {
+    var idx = root.verseIndexAt(viewY, viewX)
+    if (idx < 0) return 0
+    var item = verseList.itemAtIndex(idx)
+    if (item && item.verseAt) {
+      var local = item.mapFromItem(verseList, viewX, viewY)
+      var hit = item.verseAt(local.x, local.y)
+      if (hit >= 1) return hit
+    }
+    return root.verseAtRow(idx)
+  }
+
+  function rowKindAt(viewY) {
+    var rows = root.usePublication ? root.pubRows : root.readerRows
+    var row = rows[root.verseIndexAt(viewY)]
+    return row ? String(row.kind || "") : ""
   }
 
   function handleEscape() {
@@ -987,6 +1016,7 @@ Item {
 
       TextField {
         id: searchField
+        objectName: "searchField"
         z: 1
         anchors.left: parent.left
         anchors.right: headerRight.left
@@ -1171,6 +1201,7 @@ Item {
 
       ListView {
         id: verseList
+        objectName: "verseList"
         anchors.fill: parent
         clip: true
         visible: root.mode === "read"
@@ -1230,6 +1261,28 @@ Item {
             return Style.space(1)
           }
           readonly property int bottomPad: joinNext ? 0 : (isVerse ? Style.space(3) : 0)
+
+          // Verse under a point in this delegate's coordinates. Flow rows
+          // (publication paragraphs/poetry) hold several verse runs.
+          function verseAt(x, y) {
+            if (isVerse) return verseNum
+            if (!isFlow) return 0
+            var p = flow.mapFromItem(blockDelegate, x, y)
+            var kids = flow.children
+            var first = 0
+            var best = 0
+            for (var i = 0; i < kids.length; i++) {
+              var child = kids[i]
+              if (!child || typeof child.n !== "number" || child.n < 1) continue
+              if (!first) first = child.n
+              if (p.x >= child.x && p.x <= child.x + child.width
+                  && p.y >= child.y && p.y <= child.y + child.height)
+                return child.n
+              if (child.y + child.height <= p.y || (child.y <= p.y && child.x <= p.x))
+                best = child.n
+            }
+            return best || first
+          }
 
           function refAt(x, y) {
             var p = refFlow.mapFromItem(blockDelegate, x, y)
@@ -1451,87 +1504,116 @@ Item {
                   font.pixelSize: Style.font.bodySmall
                   font.italic: blockDelegate.kind === "d"
                 }
-
-                MouseArea {
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.IBeamCursor
-                  onEntered: {
-                    if (!root.searchActive) root.focusVerse = run.n
-                  }
-                  onClicked: function(mouse) {
-                    root.requestVerseFocus()
-                    if (mouse.modifiers & Qt.ShiftModifier) root.selectRange(root.anchorVerse, run.n)
-                    else root.selectVerse(run.n)
-                  }
-                }
               }
             }
           }
         }
 
-        MouseArea {
-          anchors.fill: parent
-          acceptedButtons: Qt.LeftButton
-          hoverEnabled: true
-          preventStealing: true
-          enabled: !root.usePublication
-          cursorShape: Qt.IBeamCursor
-          property bool wikiPress: false
-          onPressed: function(mouse) {
-            var idx = root.verseIndexAt(mouse.y)
-            var row = root.readerRows[idx]
-            if (row && String(row.kind || "") === "refs") {
-              wikiPress = true
-              mouse.accepted = true
+      }
+
+      // Drag-to-select lives above the list in viewport coordinates. It used
+      // to be a ListView child, which Flickable reparents into contentItem,
+      // so its mouse.y was already content-space and the extra mapToItem in
+      // verseIndexAt double-counted contentY: once the chapter was scrolled,
+      // presses and drags resolved to the wrong verse or none at all.
+      MouseArea {
+        id: verseDrag
+        objectName: "verseDrag"
+        anchors.fill: verseList
+        z: 5
+        visible: verseList.visible
+        enabled: verseList.visible
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        preventStealing: true
+        cursorShape: overRef ? Qt.PointingHandCursor : Qt.IBeamCursor
+        property bool wikiPress: false
+        property bool overRef: false
+        property real lastX: 0
+        property real lastY: 0
+
+        function extendTo(x, y) {
+          var verse = root.verseAtPoint(x, y)
+          if (verse >= 1 && (verse !== root.focusVerse
+              || Bible.orderedRange(root.anchorVerse, verse).start !== root.startVerse
+              || Bible.orderedRange(root.anchorVerse, verse).end !== root.endVerse))
+            root.selectRange(root.anchorVerse, verse)
+        }
+
+        function finishDrag() {
+          if (!root.dragging) return
+          root.dragging = false
+          dragScroll.stop()
+          root.persist()
+        }
+
+        onPressed: function(mouse) {
+          lastX = mouse.x
+          lastY = mouse.y
+          if (root.rowKindAt(mouse.y) === "refs") {
+            wikiPress = true
+            mouse.accepted = true
+            return
+          }
+          wikiPress = false
+          root.requestVerseFocus()
+          var verse = root.verseAtPoint(mouse.x, mouse.y)
+          if (!verse) return
+          root.dragging = true
+          if (mouse.modifiers & Qt.ShiftModifier) root.selectRange(root.anchorVerse, verse)
+          else root.selectVerse(verse)
+        }
+        onClicked: function(mouse) {
+          if (!wikiPress) return
+          wikiPress = false
+          var idx = root.verseIndexAt(mouse.y)
+          var rows = root.usePublication ? root.pubRows : root.readerRows
+          var row = rows[idx]
+          if (!(row && String(row.kind || "") === "refs")) return
+          var item = verseList.itemAtIndex(idx)
+          if (!item || !item.refAt) return
+          var local = item.mapFromItem(verseList, mouse.x, mouse.y)
+          root.queueWikiRef(item.refAt(local.x, local.y))
+        }
+        onPositionChanged: function(mouse) {
+          lastX = mouse.x
+          lastY = mouse.y
+          overRef = root.rowKindAt(mouse.y) === "refs"
+          if (root.dragging) {
+            extendTo(mouse.x, mouse.y)
+            if (Bible.dragAutoScrollStep(mouse.y, height) !== 0) dragScroll.start()
+            else dragScroll.stop()
+            return
+          }
+          var verse = root.verseAtPoint(mouse.x, mouse.y)
+          if (!verse) return
+          if (root.ignoreNav) return
+          if (!pointerGate.moved(verseList, mouse)) return
+          root.hoverLocked = false
+          root.focusVerse = verse
+        }
+        onExited: overRef = false
+        onReleased: finishDrag()
+        onCanceled: finishDrag()
+        onWheel: function(wheel) {
+          wheel.accepted = false
+        }
+
+        Timer {
+          id: dragScroll
+          interval: 16
+          repeat: true
+          onTriggered: {
+            var step = Bible.dragAutoScrollStep(verseDrag.lastY, verseDrag.height)
+            if (!root.dragging || step === 0) {
+              stop()
               return
             }
-            wikiPress = false
-            root.requestVerseFocus()
-            var verse = root.verseAtRow(idx)
-            if (!verse) return
-            root.dragging = true
-            if (mouse.modifiers & Qt.ShiftModifier) root.selectRange(root.anchorVerse, verse)
-            else {
-              root.anchorVerse = verse
-              root.selectVerse(verse)
-            }
-          }
-          onClicked: function(mouse) {
-            if (!wikiPress) return
-            wikiPress = false
-            var idx = root.verseIndexAt(mouse.y)
-            var row = root.readerRows[idx]
-            if (!(row && String(row.kind || "") === "refs")) return
-            var item = verseList.itemAtIndex(idx)
-            if (!item || !item.refAt) return
-            var local = item.mapFromItem(verseList, mouse.x, mouse.y)
-            root.queueWikiRef(item.refAt(local.x, local.y))
-          }
-          onPositionChanged: function(mouse) {
-            var verse = root.verseAtRow(root.verseIndexAt(mouse.y))
-            if (!verse) {
-              if (root.dragging) {
-                if (mouse.y < 24) verseList.flick(0, 420)
-                else if (mouse.y > height - 24) verseList.flick(0, -420)
-              }
-              return
-            }
-            if (root.dragging) {
-              root.selectRange(root.anchorVerse, verse)
-              if (mouse.y < 24) verseList.flick(0, 420)
-              else if (mouse.y > height - 24) verseList.flick(0, -420)
-            } else {
-              if (root.ignoreNav) return
-              if (!pointerGate.moved(verseList, mouse)) return
-              root.hoverLocked = false
-              root.focusVerse = verse
-            }
-          }
-          onReleased: root.dragging = false
-          onCanceled: root.dragging = false
-          onWheel: function(wheel) {
-            wheel.accepted = false
+            var top = verseList.originY
+            var bottom = verseList.originY + verseList.contentHeight - verseList.height
+            if (bottom < top) bottom = top
+            verseList.contentY = Math.max(top, Math.min(bottom, verseList.contentY + step))
+            verseDrag.extendTo(verseDrag.lastX, Math.max(1, Math.min(verseDrag.height - 1, verseDrag.lastY)))
           }
         }
       }
