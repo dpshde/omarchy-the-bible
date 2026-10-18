@@ -22,6 +22,8 @@ Listing install uses the committed `data/` and `js/` files and does not run Node
 omarchy plugin add https://github.com/dpshde/omarchy-the-bible.git --enable
 ```
 
+To update, run `omarchy plugin update io.github.dpshde.the-bible --yes`, then `omarchy-restart-shell`. The shell's live plugin reload keeps the previously compiled `Reader.qml` in its component cache, so a changed reader only takes effect after a shell restart.
+
 To rebuild bundled data from a checkout, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Usage

@@ -184,6 +184,25 @@ Item {
       verify(list.contentY > 0)
     }
 
+    function test_selectionStaysInViewWhenReaderResizes() {
+      reader.applyPlace("PHP", 4, 11, 13, false)
+      wait(50)
+      reader.anchors.margins = 0
+      reader.anchors.fill = undefined
+      reader.width = top.width
+      reader.height = 300
+      wait(60)
+      for (var n = 11; n <= 13; n++) {
+        var item = list.itemAtIndex(Bible.pubRowIndexForVerse(reader.readerRows, n))
+        verify(item !== null, "delegate " + n)
+        var y = item.mapToItem(list, 0, 0).y
+        verify(y >= -1 && y + item.height <= list.height + 1, "verse " + n + " still in view after resize (y=" + y + ")")
+      }
+      reader.anchors.fill = top
+      reader.anchors.margins = 10
+      wait(30)
+    }
+
     function test_publicationDragAcrossRuns() {
       reader.togglePublication()
       tryVerify(function() { return reader.usePublication }, 5000, "publication data loaded")

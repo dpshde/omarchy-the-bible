@@ -20,4 +20,8 @@ omarchy plugin validate ~/.config/omarchy/plugins/io.github.dpshde.the-bible
 
 ## Reader UI tests (headless Qt)
 
-`pnpm test:qml` runs `tests/qml/tst_reader.qml` with Qt 6 `qmltestrunner` on the offscreen platform, against small stand-ins for the Quickshell and Omarchy shell modules in `tests/qml/stubs/` (test-only; not installed by `install:local`). It drives real mouse presses and drags over `Reader.qml` and checks the selected range, the search field text, and the highlight. Screenshots land in `.qml-shots/`. On Debian/Ubuntu: `qt6-declarative-dev-tools qml6-module-qttest qml6-module-qtquick-effects qt6-qpa-plugins`. The script skips if `qmltestrunner` is missing.
+`pnpm test:qml` runs `tests/qml/tst_reader.qml` with Qt 6 `qmltestrunner` on the offscreen platform. It drives real mouse presses and drags over `Reader.qml` and checks the selected range, the search field text, the highlight, and that the selection stays in view. Screenshots land in `.qml-shots/`.
+
+Quickshell is stubbed (`tests/qml/stubs/Quickshell`). The Omarchy shell modules (`qs.Commons`, `qs.Ui`) are the real ones from `OMARCHY_SHELL_DIR` or `/usr/share/omarchy/shell` when present, so on an Omarchy machine (or with a copy of that tree) the reader runs against the real `TextField`, `Button`, `Style`, and `Color`. Set `OMARCHY_THEME_DIR` to a theme folder (`colors.toml`, `shell.toml`) to test a real palette. Without a shell tree it falls back to small stand-ins in `tests/qml/stubs/qs` and says so. None of this is installed by `install:local`.
+
+On Debian/Ubuntu: `qt6-declarative-dev-tools qml6-module-qttest qml6-module-qtquick-effects qml6-module-qtquick-controls qt6-qpa-plugins`. The script skips if `qmltestrunner` is missing.

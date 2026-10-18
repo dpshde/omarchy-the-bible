@@ -6,6 +6,12 @@ QtObject {
   property bool printErrors: true
   property bool watchChanges: false
   property bool preload: true
+  property bool blockLoading: false
+  property bool blockWrites: false
+  property bool atomicWrites: true
+  signal saved()
+  signal saveFailed()
+  function setText(t) { _text = String(t) }
   property string _text: ""
   signal loaded()
   signal loadFailed()

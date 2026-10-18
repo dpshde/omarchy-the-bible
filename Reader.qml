@@ -784,7 +784,7 @@ Item {
     verseList.positionViewAtIndex(idx, ListView.Contain)
   }
 
-  function scrollToSelection() {
+  function scrollToSelection(settled) {
     if (!verseList.count) return
     var rows = Bible.selectionScrollRows(
       root.usePublication ? root.pubRows : root.readerRows,
@@ -792,6 +792,9 @@ Item {
     )
     for (var i = 0; i < rows.length; i++)
       verseList.positionViewAtIndex(rows[i], ListView.Contain)
+    // Rows off screen use estimated heights until created, and the popup or
+    // overlay can still be resizing, so settle once more after layout.
+    if (settled !== true) Qt.callLater(root.scrollToSelection, true)
   }
 
   function verseSelected(n) {
@@ -1216,6 +1219,9 @@ Item {
         highlightRangeMode: ListView.NoHighlightRange
         highlight: Item { width: 0; height: 0; visible: false }
         model: root.usePublication ? root.pubRows : root.readerRows
+        onHeightChanged: {
+          if (root.mode === "read" && !root.dragging) Qt.callLater(root.scrollToSelection, true)
+        }
 
         delegate: Item {
           id: blockDelegate
